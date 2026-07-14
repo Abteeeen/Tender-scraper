@@ -1,0 +1,35 @@
+name: Publish proposal to GitHub Pages
+
+on:
+  push:
+    branches: ["claude/workflow-automation-proposal-zmdntk"]
+    paths: ["docs/**", ".github/workflows/publish-pages.yml"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+
+jobs:
+  configure-pages:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Enable Pages from this branch (/docs) and trigger a build
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -e
+          REPO="${{ github.repository }}"
+          BR="${{ github.ref_name }}"
+          echo "Configuring GitHub Pages for $REPO -> branch '$BR', path '/docs'"
+          if gh api "repos/$REPO/pages" >/dev/null 2>&1; then
+            echo "Pages already exists; updating source."
+            gh api -X PUT "repos/$REPO/pages" -f "source[branch]=$BR" -f "source[path]=/docs"
+          else
+            echo "Creating Pages site."
+            gh api -X POST "repos/$REPO/pages" -f "source[branch]=$BR" -f "source[path]=/docs"
+          fi
+          echo "Requesting a fresh build..."
+          gh api -X POST "repos/$REPO/pages/builds" >/dev/null 2>&1 || true
+          echo "Live URL:"
+          gh api "repos/$REPO/pages" --jq '.html_url'
