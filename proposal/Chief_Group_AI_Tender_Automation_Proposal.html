@@ -1,0 +1,456 @@
+<title>AI Tender Automation — Proposal for Chief Group Services</title>
+<style>
+  :root {
+    --ink: #16212e;
+    --ink-soft: #34424f;
+    --paper: #f6f7f4;
+    --paper-2: #ffffff;
+    --line: #dfe2db;
+    --muted: #5c6874;
+    --amber: #cf8323;
+    --amber-soft: #f4e6cf;
+    --go: #2f7d5b;
+    --go-soft: #dcece3;
+    --flag: #b0463a;
+    --flag-soft: #f3ddd9;
+    --shadow: 0 1px 2px rgba(20,32,46,.06), 0 8px 30px rgba(20,32,46,.06);
+    --mono: ui-monospace, "SF Mono", "SFMono-Regular", "Cascadia Mono", Menlo, Consolas, monospace;
+    --sans: system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --ink: #eef2f0;
+      --ink-soft: #c3ccd2;
+      --paper: #10161d;
+      --paper-2: #17202a;
+      --line: #29343f;
+      --muted: #93a1ac;
+      --amber: #e2a24d;
+      --amber-soft: #33291a;
+      --go: #5cba8e;
+      --go-soft: #16271f;
+      --flag: #dd7266;
+      --flag-soft: #2a1a18;
+      --shadow: 0 1px 2px rgba(0,0,0,.3), 0 10px 34px rgba(0,0,0,.35);
+    }
+  }
+  :root[data-theme="light"] {
+    --ink: #16212e; --ink-soft: #34424f; --paper: #f6f7f4; --paper-2: #ffffff;
+    --line: #dfe2db; --muted: #5c6874; --amber: #cf8323; --amber-soft: #f4e6cf;
+    --go: #2f7d5b; --go-soft: #dcece3; --flag: #b0463a; --flag-soft: #f3ddd9;
+    --shadow: 0 1px 2px rgba(20,32,46,.06), 0 8px 30px rgba(20,32,46,.06);
+  }
+  :root[data-theme="dark"] {
+    --ink: #eef2f0; --ink-soft: #c3ccd2; --paper: #10161d; --paper-2: #17202a;
+    --line: #29343f; --muted: #93a1ac; --amber: #e2a24d; --amber-soft: #33291a;
+    --go: #5cba8e; --go-soft: #16271f; --flag: #dd7266; --flag-soft: #2a1a18;
+    --shadow: 0 1px 2px rgba(0,0,0,.3), 0 10px 34px rgba(0,0,0,.35);
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--paper);
+    color: var(--ink);
+    font-family: var(--sans);
+    line-height: 1.6;
+    -webkit-font-smoothing: antialiased;
+  }
+  .wrap { max-width: 940px; margin: 0 auto; padding: 0 24px; }
+  .eyebrow {
+    font-family: var(--mono);
+    font-size: 12px;
+    letter-spacing: .14em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin: 0;
+  }
+  h1, h2, h3 { text-wrap: balance; line-height: 1.12; letter-spacing: -0.02em; }
+
+  /* ---------- Hero ---------- */
+  header.hero {
+    border-bottom: 1px solid var(--line);
+    background:
+      radial-gradient(120% 90% at 85% -10%, var(--amber-soft) 0%, transparent 55%),
+      var(--paper);
+  }
+  .hero-inner { padding: 68px 0 56px; }
+  .kicker-row {
+    display: flex; flex-wrap: wrap; gap: 10px 18px; align-items: center;
+    margin-bottom: 34px;
+  }
+  .brandmark {
+    font-family: var(--mono); font-size: 12px; letter-spacing: .1em;
+    text-transform: uppercase; color: var(--ink);
+    border: 1px solid var(--line); border-radius: 999px;
+    padding: 6px 12px; background: var(--paper-2);
+  }
+  .brandmark b { color: var(--amber); font-weight: 600; }
+  h1 {
+    font-size: clamp(34px, 6vw, 58px);
+    font-weight: 800;
+    margin: 0 0 22px;
+    max-width: 18ch;
+  }
+  h1 .hl { color: var(--amber); }
+  .lede {
+    font-size: clamp(17px, 2.1vw, 21px);
+    color: var(--ink-soft);
+    max-width: 60ch;
+    margin: 0;
+  }
+  .meta-line {
+    margin-top: 30px; padding-top: 20px; border-top: 1px solid var(--line);
+    display: flex; flex-wrap: wrap; gap: 6px 28px;
+    font-family: var(--mono); font-size: 12.5px; color: var(--muted);
+    letter-spacing: .02em;
+  }
+  .meta-line span b { color: var(--ink); font-weight: 600; }
+
+  /* ---------- Section scaffolding ---------- */
+  section { padding: 56px 0; border-bottom: 1px solid var(--line); }
+  .sec-eyebrow { display: flex; align-items: center; gap: 12px; margin-bottom: 18px; }
+  .sec-eyebrow .num {
+    font-family: var(--mono); font-size: 12px; color: var(--amber);
+    letter-spacing: .1em;
+  }
+  h2 { font-size: clamp(24px, 3.4vw, 33px); font-weight: 750; margin: 0 0 16px; }
+  .prose { max-width: 66ch; color: var(--ink-soft); font-size: 16.5px; }
+  .prose p { margin: 0 0 16px; }
+  .prose strong { color: var(--ink); }
+
+  /* ---------- Problem stat row ---------- */
+  .stat-grid {
+    display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-top: 30px;
+  }
+  .stat {
+    background: var(--paper-2); border: 1px solid var(--line);
+    border-radius: 14px; padding: 22px; box-shadow: var(--shadow);
+  }
+  .stat .big {
+    font-size: 34px; font-weight: 800; letter-spacing: -0.03em;
+    font-variant-numeric: tabular-nums; color: var(--ink);
+  }
+  .stat .big em { font-style: normal; color: var(--amber); }
+  .stat .lbl { font-size: 13.5px; color: var(--muted); margin-top: 4px; }
+
+  /* ---------- Pipeline ---------- */
+  .pipe { display: grid; gap: 14px; margin-top: 8px; }
+  .stage {
+    background: var(--paper-2); border: 1px solid var(--line); border-radius: 16px;
+    box-shadow: var(--shadow); overflow: hidden;
+  }
+  .stage-head {
+    display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap;
+    padding: 18px 22px 6px;
+  }
+  .stage-tag {
+    font-family: var(--mono); font-size: 11.5px; letter-spacing: .12em;
+    text-transform: uppercase; color: var(--amber);
+    background: var(--amber-soft); padding: 4px 9px; border-radius: 6px;
+  }
+  .stage-head h3 { font-size: 19px; margin: 0; font-weight: 700; }
+  .stage-head .cadence {
+    margin-left: auto; font-family: var(--mono); font-size: 12px; color: var(--muted);
+  }
+  .steps {
+    list-style: none; margin: 0; padding: 8px 22px 22px;
+    display: grid; gap: 2px;
+  }
+  .steps li {
+    display: grid; grid-template-columns: 26px 1fr; gap: 12px; align-items: start;
+    padding: 9px 0; border-top: 1px dashed var(--line);
+    font-size: 15px; color: var(--ink-soft);
+  }
+  .steps li:first-child { border-top: none; }
+  .steps li .i {
+    font-family: var(--mono); font-size: 12px; color: var(--muted);
+    padding-top: 2px; font-variant-numeric: tabular-nums;
+  }
+  .steps li b { color: var(--ink); font-weight: 650; }
+
+  .handoff {
+    border: 1px dashed var(--amber); background: var(--amber-soft);
+    border-radius: 16px; padding: 18px 22px;
+    display: grid; grid-template-columns: auto 1fr; gap: 16px; align-items: center;
+  }
+  .handoff .badge {
+    font-family: var(--mono); font-size: 11px; letter-spacing: .12em;
+    text-transform: uppercase; color: var(--amber);
+    writing-mode: vertical-rl; transform: rotate(180deg);
+    align-self: stretch; display: grid; place-items: center;
+    border-right: 1px solid var(--amber); padding-right: 14px;
+  }
+  .handoff p { margin: 0; font-size: 14.5px; color: var(--ink-soft); }
+  .handoff p b { color: var(--ink); }
+
+  .flow-arrow {
+    text-align: center; color: var(--muted); font-family: var(--mono); font-size: 18px;
+    line-height: 1;
+  }
+
+  /* ---------- Output cards ---------- */
+  .cards { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-top: 26px; }
+  .card {
+    background: var(--paper-2); border: 1px solid var(--line); border-radius: 14px;
+    padding: 20px; box-shadow: var(--shadow);
+  }
+  .card h4 { margin: 0 0 8px; font-size: 15.5px; letter-spacing: -0.01em; }
+  .card .tick { color: var(--go); }
+  .card p { margin: 0; font-size: 14px; color: var(--muted); }
+
+  /* ---------- Edge list ---------- */
+  .edge { display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px; margin-top: 26px; }
+  .edge-item {
+    background: var(--paper-2); border: 1px solid var(--line); border-left: 3px solid var(--go);
+    border-radius: 12px; padding: 18px 20px;
+  }
+  .edge-item h4 { margin: 0 0 6px; font-size: 16px; }
+  .edge-item p { margin: 0; font-size: 14.5px; color: var(--muted); }
+
+  /* ---------- Roadmap ---------- */
+  .road { display: grid; gap: 14px; margin-top: 24px; }
+  .phase {
+    display: grid; grid-template-columns: 150px 1fr; gap: 20px;
+    background: var(--paper-2); border: 1px solid var(--line);
+    border-radius: 14px; padding: 20px 22px; box-shadow: var(--shadow);
+  }
+  .phase .p-when {
+    font-family: var(--mono); font-size: 12px; letter-spacing: .06em;
+    text-transform: uppercase; color: var(--muted);
+  }
+  .phase .p-when .dot {
+    display: inline-block; width: 8px; height: 8px; border-radius: 50%;
+    margin-right: 7px; vertical-align: middle;
+  }
+  .phase.live .dot { background: var(--go); }
+  .phase.next .dot { background: var(--amber); }
+  .phase.future .dot { background: var(--muted); }
+  .phase h4 { margin: 0 0 6px; font-size: 17px; }
+  .phase p { margin: 0; font-size: 14.5px; color: var(--ink-soft); }
+  .phase .note {
+    margin-top: 10px; font-size: 13px; color: var(--muted);
+    border-top: 1px dashed var(--line); padding-top: 10px;
+  }
+
+  /* ---------- Close ---------- */
+  .close { background: var(--ink); color: var(--paper); border-bottom: none; }
+  .close h2 { color: #fff; }
+  :root[data-theme="dark"] .close, :root:not([data-theme="light"]) .close { }
+  .close .prose { color: rgba(255,255,255,.82); }
+  .close .prose strong { color: #fff; }
+  .steps-close { list-style: none; margin: 22px 0 0; padding: 0; display: grid; gap: 10px; }
+  .steps-close li {
+    display: grid; grid-template-columns: 28px 1fr; gap: 12px; align-items: baseline;
+    font-size: 16px; color: rgba(255,255,255,.9);
+  }
+  .steps-close li .n {
+    font-family: var(--mono); color: var(--amber); font-size: 13px;
+  }
+  footer.sig {
+    padding: 30px 0 60px; color: var(--muted); font-size: 13px;
+    display: flex; justify-content: space-between; flex-wrap: wrap; gap: 10px;
+    font-family: var(--mono); letter-spacing: .02em;
+  }
+  .disclaimer {
+    font-family: var(--mono); font-size: 11.5px; color: var(--muted);
+    background: var(--amber-soft); border: 1px dashed var(--amber);
+    border-radius: 8px; padding: 4px 8px; display: inline-block;
+  }
+
+  @media (max-width: 720px) {
+    .stat-grid, .cards, .edge { grid-template-columns: 1fr; }
+    .phase { grid-template-columns: 1fr; gap: 8px; }
+    .handoff { grid-template-columns: 1fr; }
+    .handoff .badge { writing-mode: horizontal-tb; transform: none;
+      border-right: none; border-bottom: 1px solid var(--amber); padding: 0 0 8px; justify-self: start; }
+  }
+</style>
+
+<header class="hero">
+  <div class="wrap hero-inner">
+    <div class="kicker-row">
+      <span class="brandmark"><b>CJ Studio</b> &nbsp;×&nbsp; Chief Group Services</span>
+      <p class="eyebrow">AI Tender Automation · Proposal</p>
+    </div>
+    <h1>In government tendering, the <span class="hl">fastest qualified bidder</span> sets the pace. This system gets you there first.</h1>
+    <p class="lede">A working automation that watches every relevant Queensland tender source around the clock, reads each opportunity with AI, filters it to your 50&nbsp;km service zone, and hands your team a qualified, bid-ready summary — before competitors have finished their morning scan.</p>
+    <div class="meta-line">
+      <span>Prepared for <b>Chief Group Services</b></span>
+      <span>Sector <b>Security &amp; Commercial Cleaning</b></span>
+      <span>Region <b>South East QLD</b></span>
+      <span>Status <b>Live &amp; running</b></span>
+    </div>
+  </div>
+</header>
+
+<section>
+  <div class="wrap">
+    <div class="sec-eyebrow"><span class="num">01</span><p class="eyebrow">The bottleneck</p></div>
+    <h2>The opportunity is real — but it's a speed problem, not a sourcing problem.</h2>
+    <div class="prose">
+      <p>The Australian tender landscape is fragmented across federal (AusTender), aggregator (VendorPanel) and local-council portals. New security and cleaning contracts appear every day, but finding them means <strong>manually checking multiple portals, opening every listing, and reading 100-page packs</strong> just to decide whether an opportunity is worth pursuing.</p>
+      <p>By the time a person has done that across every source, the best-positioned competitor is often already drafting. The winning edge isn't access to tenders — everyone has that. It's <strong>the hours between a tender going live and a qualified team deciding to bid.</strong></p>
+    </div>
+    <div class="stat-grid">
+      <div class="stat"><div class="big">3</div><div class="lbl">tender sources monitored in parallel, every hour</div></div>
+      <div class="stat"><div class="big"><em>24/7</em></div><div class="lbl">continuous watch — no missed listings, nights or weekends</div></div>
+      <div class="stat"><div class="big">~50<span style="font-size:20px">km</span></div><div class="lbl">service-zone filter around Brisbane &amp; the Gold Coast</div></div>
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="wrap">
+    <div class="sec-eyebrow"><span class="num">02</span><p class="eyebrow">How it works today</p></div>
+    <h2>Two AI stages, one human checkpoint.</h2>
+    <div class="prose" style="margin-bottom:26px">
+      <p>The system runs as two connected pipelines. The first finds and qualifies every opportunity automatically. A team member gives a one-click go-ahead on the ones worth pursuing. The second then performs a deep, bid-focused read of the full tender pack.</p>
+    </div>
+
+    <div class="pipe">
+      <div class="stage">
+        <div class="stage-head">
+          <span class="stage-tag">Stage 1</span>
+          <h3>Discovery &amp; Triage</h3>
+          <span class="cadence">runs hourly</span>
+        </div>
+        <ul class="steps">
+          <li><span class="i">01</span><span><b>Scan every source</b> — AusTender, VendorPanel and Brisbane City Council are pulled in parallel and normalised into one clean list.</span></li>
+          <li><span class="i">02</span><span><b>Keyword filter</b> removes obvious noise, keeping security, guarding, patrol, CCTV, cleaning and facilities work.</span></li>
+          <li><span class="i">03</span><span><b>Never see the same tender twice</b> — a memory of thousands of past listings suppresses duplicates automatically.</span></li>
+          <li><span class="i">04</span><span><b>AI reads &amp; classifies each one</b> — service type, location, budget, contract length, hours, deadline, red flags, and an A / B / C / Reject priority tier.</span></li>
+          <li><span class="i">05</span><span><b>Service-zone gate</b> — an authoritative list of ~600 QLD suburbs and postcodes keeps only work inside your 50&nbsp;km reach and drops everything interstate.</span></li>
+          <li><span class="i">06</span><span><b>Draft response written</b> — a first-pass Expression of Interest is generated for each qualified tender.</span></li>
+          <li><span class="i">07</span><span><b>Logged to the triage sheet</b>, ranked and ready for review.</span></li>
+        </ul>
+      </div>
+
+      <div class="flow-arrow">↓</div>
+
+      <div class="handoff">
+        <div class="badge">Human checkpoint</div>
+        <p><b>One decision, from your team.</b> A reviewer scans the ranked sheet and marks the tenders worth pursuing as <b>Approved</b>. That single tick is the trigger for the deep-analysis stage — the person stays in control of what the business commits to, without doing any of the searching or reading.</p>
+      </div>
+
+      <div class="flow-arrow">↓</div>
+
+      <div class="stage">
+        <div class="stage-head">
+          <span class="stage-tag">Stage 2</span>
+          <h3>Deep Analysis &amp; Bid Intelligence</h3>
+          <span class="cadence">on approval</span>
+        </div>
+        <ul class="steps">
+          <li><span class="i">01</span><span><b>Opens the full tender pack</b> — PDFs, requirement and pricing spreadsheets, even zipped bundles.</span></li>
+          <li><span class="i">02</span><span><b>AI extracts what wins bids</b> — compliance and licensing requirements, the pricing/rate structure, full scope of work, KPIs &amp; SLAs, submission rules and evaluation weightings.</span></li>
+          <li><span class="i">03</span><span><b>Recommends a bid strategy</b> — practical positioning advice tailored to the tender.</span></li>
+          <li><span class="i">04</span><span><b>Alerts the team on Slack</b> — the moment analysis is ready, or if a document is still needed.</span></li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="wrap">
+    <div class="sec-eyebrow"><span class="num">03</span><p class="eyebrow">What your team receives</p></div>
+    <h2>Every morning, a ranked pipeline instead of a blank search bar.</h2>
+    <div class="cards">
+      <div class="card">
+        <h4><span class="tick">✓</span> A prioritised tender board</h4>
+        <p>One sheet, every live opportunity, ranked A–C with location, deadline, days-to-close, budget and red flags already filled in.</p>
+      </div>
+      <div class="card">
+        <h4><span class="tick">✓</span> A ready-to-edit bid draft</h4>
+        <p>A first-pass Expression of Interest attached to every qualified tender — a starting point, not a blank page.</p>
+      </div>
+      <div class="card">
+        <h4><span class="tick">✓</span> A full bid-intelligence brief</h4>
+        <p>For approved tenders: compliance checklist, pricing structure, scope, KPIs, submission rules and a recommended strategy.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="wrap">
+    <div class="sec-eyebrow"><span class="num">04</span><p class="eyebrow">Why it wins</p></div>
+    <h2>The advantage is built into how it filters.</h2>
+    <div class="edge">
+      <div class="edge-item">
+        <h4>It only shows you winnable work</h4>
+        <p>The 50&nbsp;km service-zone gate means the board is never cluttered with jobs you can't service. Signal, not noise.</p>
+      </div>
+      <div class="edge-item">
+        <h4>It reads faster than a competitor can</h4>
+        <p>AI digests a 100-page pack in seconds and surfaces the deal-breakers a person would spend an afternoon finding.</p>
+      </div>
+      <div class="edge-item">
+        <h4>It never sleeps and never forgets</h4>
+        <p>Hourly scanning with duplicate suppression means nothing slips through and nothing is reviewed twice.</p>
+      </div>
+      <div class="edge-item">
+        <h4>It keeps a human in command</h4>
+        <p>The AI does the finding and reading; your team keeps the judgement call on what's worth bidding.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="wrap">
+    <div class="sec-eyebrow"><span class="num">05</span><p class="eyebrow">Where it goes next</p></div>
+    <h2>The roadmap: from assisted to fully automated.</h2>
+    <div class="prose">
+      <p>What's live today already removes the heavy lifting. The next phases close the remaining manual gaps — so the system moves from <strong>finding tenders for your team</strong> to <strong>preparing complete, submission-ready bids on its own.</strong></p>
+    </div>
+    <div class="road">
+      <div class="phase live">
+        <div class="p-when"><span class="dot"></span>Live now</div>
+        <div>
+          <h4>Assisted pipeline</h4>
+          <p>Automated discovery, AI triage, zone filtering, first-pass drafts and deep bid analysis — with a one-click human approval in the middle.</p>
+        </div>
+      </div>
+      <div class="phase next">
+        <div class="p-when"><span class="dot"></span>Phase 2</div>
+        <div>
+          <h4>Hands-off intake &amp; auto-qualification</h4>
+          <p>Top-tier, in-zone tenders are auto-approved by confidence rules, and the full tender pack is pulled from each portal automatically — removing the manual log-in, download and upload step entirely.</p>
+          <p class="note">Portal downloads sit behind account log-ins and terms of use. We automate them with securely stored credentials and per-portal handling, with a fallback alert whenever a portal needs human sign-off — so nothing silently stalls.</p>
+        </div>
+      </div>
+      <div class="phase future">
+        <div class="p-when"><span class="dot"></span>Phase 3</div>
+        <div>
+          <h4>Bid drafting in your voice, into your systems</h4>
+          <p>Trained on Chief Group's past submissions, the AI produces complete draft responses in your tone and format, delivered straight into your CRM or bid folder — leaving your team to refine and submit, not build from scratch.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="close">
+  <div class="wrap">
+    <div class="sec-eyebrow"><span class="num">06</span><p class="eyebrow" style="color:var(--amber)">Next steps</p></div>
+    <h2>What we'd need to move to Phase 2.</h2>
+    <div class="prose">
+      <p>The engine is already proven and running. To progress it toward full automation, we'd align on three things with your team:</p>
+    </div>
+    <ul class="steps-close">
+      <li><span class="n">01</span><span><strong>Compliance dealbreakers</strong> — the certifications, insurance thresholds and licences the AI should treat as automatic red flags.</span></li>
+      <li><span class="n">02</span><span><strong>3–5 past tender submissions</strong> (pricing redacted) — to train the drafting AI on Chief Group's tone and format.</span></li>
+      <li><span class="n">03</span><span><strong>Portal &amp; system access</strong> — the accounts to automate downloads from, and the CRM or folder where finished drafts should land.</span></li>
+    </ul>
+    <p class="prose" style="margin-top:26px"><strong>A 15-minute alignment call</strong> is all it takes to scope Phase 2 and confirm the automation targets.</p>
+  </div>
+</section>
+
+<footer class="sig">
+  <div class="wrap" style="display:flex;justify-content:space-between;flex-wrap:wrap;gap:12px;width:100%">
+    <span>Prepared by CJ Studio</span>
+    <span class="disclaimer">Metrics shown are configuration facts; commercial figures to be confirmed with client data.</span>
+  </div>
+</footer>
