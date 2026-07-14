@@ -188,6 +188,10 @@
   .node.checkpoint .body { border-style: dashed; border-color: var(--amber-dim); background: color-mix(in srgb, var(--amber-glow) 40%, var(--panel)); }
   .node.checkpoint .tag { color: var(--amber); }
 
+  .node.paid .bullet { color: var(--amber); border-color: var(--amber-dim); }
+  .node.paid .body { border-color: var(--amber-dim); }
+  .paidchip { font-family: var(--mono); font-size: 9px; letter-spacing: .1em; text-transform: uppercase; color: #120d05; background: var(--amber); padding: 1px 6px; border-radius: 5px; margin-left: 8px; vertical-align: middle; }
+
   .stage-label {
     display: flex; align-items: center; gap: 12px; margin: 26px 0 12px; padding-left: 2px;
   }
@@ -301,7 +305,8 @@
       <a href="#problem">Problem</a>
       <a href="#system">System</a>
       <a href="#outputs">Output</a>
-      <a href="#roadmap">Roadmap</a>
+      <a href="coverage.html">Coverage</a>
+      <a href="#paths">Free vs Paid</a>
       <a href="#next">Next steps</a>
     </div>
   </div>
@@ -317,7 +322,7 @@
       <span class="line"><span class="glow">fastest qualified</span></span>
       <span class="line"><span>bidder sets the pace.</span></span>
     </h1>
-    <p class="lede">A working automation that watches every relevant Queensland tender source around the clock, reads each opportunity with AI, filters it to your 50&nbsp;km service zone, and hands your team a qualified, bid-ready brief — before competitors finish their morning scan.</p>
+    <p class="lede">A working automation that watches every relevant Queensland <b>security &amp; cleaning</b> tender around the clock, reads each opportunity with AI, filters it to your 50&nbsp;km service zone, and hands your team a qualified, bid-ready brief — <b>with the buyer and the right person to contact</b> — before competitors finish their morning scan.</p>
     <div class="hero-meta">
       <div class="m"><div class="k">Prepared for</div><div class="v">Chief Group Services</div></div>
       <div class="m"><div class="k">Sector</div><div class="v">Security &amp; Cleaning</div></div>
@@ -375,9 +380,22 @@
   </div>
 </section>
 
+<section id="paths">
+  <div class="wrap">
+    <div class="sec-head reveal"><span class="idx">04</span><p class="eyebrow">Free path vs paid path</p></div>
+    <h2 class="reveal">Everything you see runs on free tools. The paid layer opens the locked doors.</h2>
+    <p class="lead reveal d1">The system today is built entirely on free resources — n8n, Gemini and Google Sheets. It finds, qualifies and drafts, and pulls the <strong>point of contact</strong> straight from each tender. The <strong>paid layer (Apify)</strong> adds the two things a free tier can't reach: <strong>auto-downloading login-gated packs</strong> and <strong>scraping the decision-maker's socials</strong> — LinkedIn, Facebook, Instagram.</p>
+    <div class="cards">
+      <div class="card reveal d1" style="border-color:var(--go-dim)"><div class="ic">◉</div><h4>Free · running today</h4><p>Hourly scanning, AI tiering, 50&nbsp;km zone filter, bid drafts, deep analysis, and buyer + contact officer (name, email, phone) read from the tender text.</p></div>
+      <div class="card reveal d2" style="border-color:var(--amber-dim)"><div class="ic" style="background:var(--amber-soft);color:var(--amber)">★</div><h4>Paid · fully automated</h4><p>Auto-login &amp; download of tender packs, social/contact scraper (LinkedIn/FB/IG), auto-approval of Tier A, and more sources — a ready-to-contact lead card per tender.</p></div>
+      <div class="card reveal d3"><div class="ic">⇲</div><h4>See the full coverage map</h4><p>How many sources we watch, exactly what's locked, and why a human is in the loop today.<br><a href="coverage.html" style="color:var(--amber);text-decoration:none;font-family:var(--mono);font-size:13px">Open coverage page →</a></p></div>
+    </div>
+  </div>
+</section>
+
 <section id="edge">
   <div class="wrap">
-    <div class="sec-head reveal"><span class="idx">04</span><p class="eyebrow">Why it wins</p></div>
+    <div class="sec-head reveal"><span class="idx">05</span><p class="eyebrow">Why it wins</p></div>
     <h2 class="reveal">The advantage is built into how it filters.</h2>
     <div class="edge">
       <div class="edge-item reveal d1"><div class="en">A</div><div><h4>It only surfaces winnable work</h4><p>The 50&nbsp;km zone gate means the board is never cluttered with jobs you can't service. Signal, not noise.</p></div></div>
@@ -390,7 +408,7 @@
 
 <section id="roadmap">
   <div class="wrap">
-    <div class="sec-head reveal"><span class="idx">05</span><p class="eyebrow">Where it goes next</p></div>
+    <div class="sec-head reveal"><span class="idx">06</span><p class="eyebrow">Where it goes next</p></div>
     <h2 class="reveal">From assisted to fully automated.</h2>
     <p class="lead reveal d1">What's live today already removes the heavy lifting. The next phases close the remaining manual gaps — moving the system from <strong>finding tenders for your team</strong> to <strong>preparing complete, submission-ready bids on its own.</strong></p>
     <div class="road">
@@ -412,7 +430,7 @@
 
 <section id="next">
   <div class="wrap">
-    <div class="sec-head reveal"><span class="idx">06</span><p class="eyebrow amber">Next steps</p></div>
+    <div class="sec-head reveal"><span class="idx">07</span><p class="eyebrow amber">Next steps</p></div>
     <h2 class="reveal">What we'd need to move to Phase 2.</h2>
     <p class="lead reveal d1">The engine is already proven and running. To progress it toward full automation, we'd align on three things with your team.</p>
     <div class="steps">
@@ -476,7 +494,13 @@
     { checkpoint:false, id:"n10", tag:"STRATEGY", ttl:"Recommend a bid strategy",
       desc:"The system returns practical, tender-specific positioning advice — how to frame a competitive, winning response.",
       meta:[["Output","Strategy brief"],["Tailored","Per tender"]] },
-    { checkpoint:false, id:"n11", tag:"NOTIFY", ttl:"Alert the team",
+    { checkpoint:false, id:"n11", tag:"CONTACT", ttl:"Extract the point of contact",
+      desc:"From the tender itself, the system pulls the buyer organisation and the best person to approach — name, role, email and phone — exactly as written, never invented.",
+      meta:[["Cost","Free"],["Source","Tender text"]] },
+    { checkpoint:false, id:"n12", tag:"SOCIAL", ttl:"Enrich socials — LinkedIn / FB / IG", paid:true,
+      desc:"The paid layer takes the buyer and officer and finds their verified LinkedIn, Facebook and Instagram, plus any missing email or phone — turning a listing into a ready-to-contact lead card.",
+      meta:[["Layer","Apify · paid"],["Output","Lead card"]] },
+    { checkpoint:false, id:"n13", tag:"NOTIFY", ttl:"Alert the team",
       desc:"The moment analysis is ready — or if a document is still needed — the team is pinged on Slack, so nothing waits in a queue no one is watching.",
       meta:[["Channel","Slack"],["Latency","Real-time"]] }
   ];
@@ -499,13 +523,14 @@
       flowEl.appendChild(sl);
     }
     var b = document.createElement("button");
-    b.className = "node" + (n.checkpoint ? " checkpoint" : "");
+    b.className = "node" + (n.checkpoint ? " checkpoint" : "") + (n.paid ? " paid" : "");
     b.setAttribute("role","option");
     b.setAttribute("aria-selected", i===0 ? "true":"false");
     b.dataset.i = i;
-    var badge = n.checkpoint ? "◆" : String(i+1).padStart(2,"0");
+    var badge = n.checkpoint ? "◆" : (n.paid ? "★" : String(i+1).padStart(2,"0"));
+    var chip = n.paid ? '<span class="paidchip">Paid</span>' : '';
     b.innerHTML = '<span class="bullet">'+badge+'</span>'
-      + '<span class="body"><span class="tag">'+esc(n.tag)+'</span><span class="ttl">'+esc(n.ttl)+'</span></span>';
+      + '<span class="body"><span class="tag">'+esc(n.tag)+chip+'</span><span class="ttl">'+esc(n.ttl)+'</span></span>';
     b.addEventListener("click", function(){ select(i); });
     flowEl.appendChild(b);
     buttons.push(b);
@@ -521,7 +546,7 @@
       + '<div class="ro-ttl">'+esc(n.ttl)+'</div>'
       + '<div class="ro-desc">'+esc(n.desc)+'</div>'
       + '<div class="ro-meta">'+metaHtml+'</div>'
-      + '<div class="ro-hint">'+(n.checkpoint ? "◆ The only human touchpoint in the flow." : "Automated · no human input required")+'</div>';
+      + '<div class="ro-hint">'+(n.checkpoint ? "◆ The only human touchpoint in the flow." : (n.paid ? "★ Paid layer — Apify social &amp; contact enrichment" : "Automated · no human input required"))+'</div>';
     roContent.classList.remove("ro-fade"); void roContent.offsetWidth; roContent.classList.add("ro-fade");
     roIndex.textContent = "STEP "+String(i+1).padStart(2,"0")+" / "+String(total).padStart(2,"0");
   }

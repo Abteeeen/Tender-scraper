@@ -1,0 +1,235 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="What the tender system watches, what's locked behind login-gated portals, why a human is in the loop today, and what the paid (Apify) path unlocks.">
+<meta name="color-scheme" content="dark">
+<title>Coverage & the Locked Doors — Signal Tender Intelligence</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230b1117'/%3E%3Ccircle cx='16' cy='16' r='9' fill='none' stroke='%23f2a13c' stroke-width='1.6'/%3E%3Ccircle cx='16' cy='16' r='3.2' fill='%23f2a13c'/%3E%3Cpath d='M16 16 L23 9' stroke='%2346c98b' stroke-width='1.6' stroke-linecap='round'/%3E%3C/svg%3E">
+<style>
+  :root{
+    --bg:#090d12;--bg-2:#0d141b;--panel:#111a23;--panel-2:#16212c;--line:#22303c;--line-soft:#1a2530;
+    --ink:#eaf1f5;--ink-2:#b3c1cc;--muted:#728695;--amber:#f2a13c;--amber-dim:#7a5527;--amber-soft:rgba(242,161,60,.12);
+    --go:#46c98b;--go-dim:#1c3a2e;--flag:#e5675a;--flag-dim:#3a201d;
+    --mono:ui-monospace,"SF Mono","SFMono-Regular","Cascadia Mono",Menlo,Consolas,monospace;
+    --sans:system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;--maxw:1080px;--ease:cubic-bezier(.2,.7,.2,1);
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--sans);line-height:1.62;-webkit-font-smoothing:antialiased;overflow-x:hidden}
+  ::selection{background:var(--amber);color:#10160c}
+  .wrap{width:100%;max-width:var(--maxw);margin:0 auto;padding:0 28px}
+  a{color:inherit}
+  h1,h2,h3,h4{letter-spacing:-.025em;line-height:1.1;text-wrap:balance;margin:0}
+  .eyebrow{font-family:var(--mono);font-size:12px;letter-spacing:.22em;text-transform:uppercase;color:var(--muted);margin:0}
+  nav{position:sticky;top:0;z-index:40;backdrop-filter:blur(10px);background:color-mix(in srgb,var(--bg) 78%,transparent);border-bottom:1px solid var(--line-soft)}
+  .nav-in{display:flex;align-items:center;justify-content:space-between;height:60px}
+  .logo{display:flex;align-items:center;gap:11px;font-family:var(--mono);font-size:13px;letter-spacing:.04em}
+  .logo .dot{width:9px;height:9px;border-radius:50%;background:var(--amber);box-shadow:0 0 0 4px var(--amber-soft)}
+  .logo b{color:var(--ink);font-weight:600}.logo span{color:var(--muted)}
+  .nav-links{display:flex;gap:26px;font-family:var(--mono);font-size:12px}
+  .nav-links a{color:var(--muted);text-decoration:none;transition:color .2s}
+  .nav-links a:hover,.nav-links a.active{color:var(--amber)}
+  @media (max-width:720px){.nav-links{display:none}}
+  header.hero{border-bottom:1px solid var(--line-soft);background:radial-gradient(80% 60% at 80% -10%,var(--amber-soft),transparent 50%)}
+  .hero-in{padding:64px 0 52px}
+  .chip{display:inline-flex;align-items:center;gap:10px;font-family:var(--mono);font-size:12px;border:1px solid var(--line);border-radius:999px;padding:7px 14px;background:color-mix(in srgb,var(--panel) 70%,transparent);color:var(--ink-2);margin-bottom:26px}
+  .chip b{color:var(--amber)}
+  h1{font-size:clamp(32px,5.5vw,60px);font-weight:800;max-width:20ch;margin:0 0 20px}
+  h1 .g{color:var(--amber)}
+  .lede{font-size:clamp(16px,2vw,20px);color:var(--ink-2);max-width:60ch;margin:0}
+  section{padding:60px 0;border-top:1px solid var(--line-soft)}
+  .sec-head{display:flex;align-items:baseline;gap:14px;margin-bottom:26px}
+  .sec-head .idx{font-family:var(--mono);font-size:12px;color:var(--amber)}
+  h2{font-size:clamp(24px,3.6vw,38px);font-weight:750;max-width:22ch}
+  .lead{max-width:64ch;color:var(--ink-2);font-size:16.5px;margin:16px 0 0}
+  .lead strong{color:var(--ink)}
+  /* stat row */
+  .stats{display:grid;grid-template-columns:repeat(4,1fr);gap:1px;margin-top:34px;background:var(--line);border:1px solid var(--line);border-radius:14px;overflow:hidden}
+  .stat{background:var(--bg-2);padding:24px 20px}
+  .stat .num{font-size:clamp(28px,4vw,42px);font-weight:800;letter-spacing:-.04em;font-variant-numeric:tabular-nums;line-height:1}
+  .stat .num .u{font-size:.45em;color:var(--amber);font-weight:700;margin-left:2px}
+  .stat .lbl{font-size:13px;color:var(--muted);margin-top:10px}
+  @media (max-width:820px){.stats{grid-template-columns:repeat(2,1fr)}}
+  /* source table */
+  .tbl-wrap{overflow-x:auto;margin-top:30px;border:1px solid var(--line);border-radius:14px}
+  table{border-collapse:collapse;width:100%;min-width:640px;font-size:14px}
+  th,td{text-align:left;padding:13px 16px;border-bottom:1px solid var(--line-soft);vertical-align:top}
+  thead th{font-family:var(--mono);font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);background:rgba(0,0,0,.2)}
+  tbody tr:last-child td{border-bottom:none}
+  td b{color:var(--ink)}
+  .pill{display:inline-block;font-family:var(--mono);font-size:10.5px;letter-spacing:.04em;padding:3px 8px;border-radius:6px;white-space:nowrap}
+  .pill.live{color:var(--go);background:var(--go-dim)}
+  .pill.locked{color:var(--flag);background:var(--flag-dim)}
+  .pill.plan{color:var(--amber);background:var(--amber-soft)}
+  /* locked cards */
+  .locks{display:grid;grid-template-columns:repeat(2,1fr);gap:16px;margin-top:30px}
+  @media (max-width:760px){.locks{grid-template-columns:1fr}}
+  .lock{background:var(--panel);border:1px solid var(--line);border-left:3px solid var(--flag);border-radius:12px;padding:22px}
+  .lock h4{font-size:16px}
+  .lock .ic{font-family:var(--mono);color:var(--flag);font-size:13px;margin-bottom:8px}
+  .lock p{margin:6px 0 0;color:var(--muted);font-size:14px}
+  /* free vs paid */
+  .compare{display:grid;grid-template-columns:1fr 1fr;gap:18px;margin-top:34px}
+  @media (max-width:760px){.compare{grid-template-columns:1fr}}
+  .col{border:1px solid var(--line);border-radius:16px;overflow:hidden;background:var(--panel)}
+  .col .top{padding:20px 22px;border-bottom:1px solid var(--line)}
+  .col.free .top{background:rgba(70,201,139,.07)}
+  .col.paid .top{background:var(--amber-soft)}
+  .col .tag{font-family:var(--mono);font-size:11px;letter-spacing:.12em;text-transform:uppercase}
+  .col.free .tag{color:var(--go)}.col.paid .tag{color:var(--amber)}
+  .col h3{font-size:20px;margin-top:6px}
+  .col .sub{font-size:13px;color:var(--muted);margin-top:4px}
+  .col ul{list-style:none;margin:0;padding:16px 22px 22px;display:grid;gap:11px}
+  .col li{display:grid;grid-template-columns:20px 1fr;gap:10px;font-size:14.5px;color:var(--ink-2)}
+  .col li .m{font-family:var(--mono);font-size:13px}
+  .col.free li .m{color:var(--go)}.col.paid li .m{color:var(--amber)}
+  .col li.off{color:var(--muted)}.col li.off .m{color:var(--flag)}
+  /* human loop */
+  .steps{display:grid;gap:12px;margin-top:30px}
+  .step{display:grid;grid-template-columns:44px 1fr;gap:18px;padding:20px 22px;background:var(--panel);border:1px solid var(--line);border-radius:13px}
+  .step .n{font-family:var(--mono);font-size:20px;color:var(--amber);font-weight:600}
+  .step h4{font-size:16px}.step p{margin:5px 0 0;color:var(--muted);font-size:14.5px}
+  .cta{margin-top:40px;display:flex;flex-wrap:wrap;gap:14px;align-items:center}
+  .cta a{display:inline-flex;align-items:center;gap:9px;font-family:var(--mono);font-size:13px;text-decoration:none;padding:14px 22px;border-radius:10px;font-weight:600;transition:transform .2s var(--ease)}
+  .cta a.primary{background:var(--amber);color:#120d05}
+  .cta a.ghost{border:1px solid var(--line);color:var(--ink-2)}
+  .cta a:hover{transform:translateY(-2px)}
+  footer{border-top:1px solid var(--line-soft);padding:34px 0 60px}
+  .foot-in{display:flex;flex-wrap:wrap;justify-content:space-between;gap:12px;font-family:var(--mono);font-size:12px;color:var(--muted)}
+  .foot-in b{color:var(--ink-2)}
+  .note{font-family:var(--mono);font-size:11px;color:var(--muted);background:var(--amber-soft);border:1px dashed var(--amber-dim);border-radius:8px;padding:5px 9px;display:inline-block;margin-top:26px}
+</style>
+</head>
+<body>
+<nav>
+  <div class="wrap nav-in">
+    <div class="logo"><span class="dot"></span><b>SIGNAL</b><span>/ Coverage</span></div>
+    <div class="nav-links">
+      <a href="index.html">Overview</a>
+      <a href="coverage.html" class="active">Coverage</a>
+      <a href="index.html#roadmap">Roadmap</a>
+      <a href="index.html#next">Next steps</a>
+    </div>
+  </div>
+</nav>
+
+<header class="hero">
+  <div class="wrap hero-in">
+    <div class="chip"><b>Coverage map</b> · what we watch &amp; what's locked</div>
+    <h1>We scan the whole SEQ tender market. Some doors are <span class="g">locked</span> — here's which, and how the paid path opens them.</h1>
+    <p class="lede">Security and cleaning, equal priority, inside ~50&nbsp;km of Brisbane and the Gold Coast. This page shows exactly how many sources we monitor, what the free system can and can't reach today, why a person is still in the loop, and what changes when we plug in the paid layer.</p>
+  </div>
+</header>
+
+<section>
+  <div class="wrap">
+    <div class="sec-head"><span class="idx">01</span><p class="eyebrow">What we watch</p></div>
+    <h2>Coverage at a glance.</h2>
+    <div class="stats">
+      <div class="stat"><div class="num">3</div><div class="lbl">live sources feeding the system today</div></div>
+      <div class="stat"><div class="num">6<span class="u">+</span></div><div class="lbl">SEQ councils reachable via the VendorPanel hub</div></div>
+      <div class="stat"><div class="num">50<span class="u">km</span></div><div class="lbl">zone filter around Brisbane &amp; Gold Coast</div></div>
+      <div class="stat"><div class="num">600<span class="u">+</span></div><div class="lbl">suburbs / postcodes in the in-zone whitelist</div></div>
+    </div>
+
+    <div class="tbl-wrap">
+      <table>
+        <thead><tr><th>Source</th><th>Covers</th><th>How it posts</th><th>Cleaning + Security</th><th>Status</th></tr></thead>
+        <tbody>
+          <tr><td><b>AusTender</b></td><td>Federal buildings, defence, agencies (Brisbane)</td><td>Public RSS</td><td>Both</td><td><span class="pill live">Live · free</span></td></tr>
+          <tr><td><b>VendorPanel</b></td><td><b>The hub</b> — Gold Coast, Logan, Ipswich, Redland + QLD state gov</td><td>Public RSS list · <b>login for docs</b></td><td>Both</td><td><span class="pill live">Live · free feed</span></td></tr>
+          <tr><td><b>Brisbane City Council</b></td><td>Brisbane LGA</td><td>Website table (scraped)</td><td>Both</td><td><span class="pill live">Live · needs fix</span></td></tr>
+          <tr><td><b>QTenders</b></td><td>QLD Health, Education, TMR, universities</td><td>State portal (migrating to VendorPanel)</td><td>Both</td><td><span class="pill plan">Planned</span></td></tr>
+          <tr><td><b>City of Moreton Bay</b></td><td>Moreton Bay LGA</td><td>eProcure portal</td><td>Both</td><td><span class="pill plan">Planned</span></td></tr>
+          <tr><td><b>Tenders.Net</b></td><td>Gold Coast &amp; Ipswich document portal</td><td>Login portal</td><td>Both</td><td><span class="pill locked">Locked</span></td></tr>
+        </tbody>
+      </table>
+    </div>
+    <span class="note">Because VendorPanel is now the shared platform for most SEQ councils and state government, authenticating VendorPanel once covers the majority of in-zone tenders in a single move.</span>
+  </div>
+</section>
+
+<section>
+  <div class="wrap">
+    <div class="sec-head"><span class="idx">02</span><p class="eyebrow">What's locked</p></div>
+    <h2>The doors the free system can't open by itself.</h2>
+    <p class="lead">We can <strong>see</strong> every tender listing. What we can't reach on the free tier is what sits <strong>behind a login</strong> — and that's exactly the material needed to bid and to reach the right person.</p>
+    <div class="locks">
+      <div class="lock"><div class="ic">▣ LOCKED</div><h4>The full tender pack</h4><p>VendorPanel, Tenders.Net and eProcure require an account and often "register interest" before the PDFs, pricing sheets and specs unlock. A plain fetch can't cross that.</p></div>
+      <div class="lock"><div class="ic">▣ LOCKED</div><h4>Terms &amp; conditions gates</h4><p>Some portals force a checkbox / T&amp;C acceptance or a captcha per download — a deliberate barrier to automation.</p></div>
+      <div class="lock"><div class="ic">▣ LOCKED</div><h4>The decision-maker's socials</h4><p>The tender names a contact officer, but their LinkedIn, Facebook and Instagram — the warm outreach channels — live behind those networks, not in the document.</p></div>
+      <div class="lock"><div class="ic">▣ LOCKED</div><h4>Missing contact details</h4><p>When a listing omits a direct email or phone, filling that gap needs an external lookup the free tier doesn't run.</p></div>
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="wrap">
+    <div class="sec-head"><span class="idx">03</span><p class="eyebrow">Why a human is in the loop now</p></div>
+    <h2>One person crosses the locked doors — for now.</h2>
+    <p class="lead">The free system does <strong>all</strong> the finding, reading, tiering, zone-filtering and drafting. A person is needed for the single stretch the free tier can't automate: <strong>logging into the portal and pulling the pack.</strong></p>
+    <div class="steps">
+      <div class="step"><div class="n">01</div><div><h4>System captures &amp; qualifies</h4><p>Every in-zone security/cleaning tender is scored A–C, drafted, and logged — automatically.</p></div></div>
+      <div class="step"><div class="n">02</div><div><h4>Human approves &amp; unlocks</h4><p>The reviewer marks the good ones Approved, logs into the portal, downloads the pack, and drops the link in. This is the only manual step.</p></div></div>
+      <div class="step"><div class="n">03</div><div><h4>System resumes</h4><p>Deep analysis, compliance, pricing, bid strategy and the point-of-contact extraction all run automatically from there.</p></div></div>
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="wrap">
+    <div class="sec-head"><span class="idx">04</span><p class="eyebrow">Free path vs paid path</p></div>
+    <h2>What the paid layer unlocks.</h2>
+    <div class="compare">
+      <div class="col free">
+        <div class="top"><div class="tag">Free path · running today</div><h3>Built on free tools</h3><div class="sub">n8n · Gemini · Google Sheets · Slack</div></div>
+        <ul>
+          <li><span class="m">✓</span> Scans AusTender, VendorPanel &amp; BCC hourly</li>
+          <li><span class="m">✓</span> AI tiering + 50&nbsp;km zone filter</li>
+          <li><span class="m">✓</span> First-pass bid draft per tender</li>
+          <li><span class="m">✓</span> Deep analysis of uploaded packs</li>
+          <li><span class="m">✓</span> Point of contact from the tender text (buyer, officer, email, phone)</li>
+          <li class="off"><span class="m">✕</span> Can't auto-download login-gated packs</li>
+          <li class="off"><span class="m">✕</span> No LinkedIn / Facebook / Instagram</li>
+          <li class="off"><span class="m">✕</span> Needs a human to unlock the portal</li>
+        </ul>
+      </div>
+      <div class="col paid">
+        <div class="top"><div class="tag">Paid path · fully automated</div><h3>+ Apify social &amp; download layer</h3><div class="sub">everything free, plus the locked doors</div></div>
+        <ul>
+          <li><span class="m">★</span> Auto-login &amp; auto-download from VendorPanel &amp; portals</li>
+          <li><span class="m">★</span> Social scraper — verified LinkedIn / Facebook / Instagram</li>
+          <li><span class="m">★</span> Fills missing email / phone via external lookup</li>
+          <li><span class="m">★</span> Auto-approve Tier A in-zone (no human tick)</li>
+          <li><span class="m">★</span> Expands to QTenders, Moreton Bay &amp; more councils</li>
+          <li><span class="m">★</span> Fallback alert only when a portal truly blocks a bot</li>
+          <li><span class="m">★</span> A ready-to-contact lead card per tender</li>
+          <li><span class="m">★</span> Hands-off end to end</li>
+        </ul>
+      </div>
+    </div>
+    <span class="note">The paid layer is modular — you switch it on source by source, so cost scales with the value it returns.</span>
+  </div>
+</section>
+
+<section>
+  <div class="wrap">
+    <div class="sec-head"><span class="idx">05</span><p class="eyebrow">So — can we go forward?</p></div>
+    <h2>Yes. The engine is proven; the paid layer is a switch, not a rebuild.</h2>
+    <p class="lead">Everything above the locked doors already works. Moving to fully automated means plugging Apify into three places — portal download, social/contact enrichment, and auto-approval — while the rest of the pipeline stays exactly as it is today.</p>
+    <div class="cta">
+      <a class="primary" href="index.html#next">See the next steps →</a>
+      <a class="ghost" href="index.html">Back to overview</a>
+    </div>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap foot-in">
+    <span>Prepared by <b>CJ Studio</b> · Signal Tender Intelligence</span>
+    <span>Coverage figures are configuration facts of the live system.</span>
+  </div>
+</footer>
+</body>
+</html>
