@@ -1,0 +1,635 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="An AI system that watches every Queensland tender source around the clock, reads each opportunity, filters it to your service zone, and hands your team a bid-ready brief. Proposal by CJ Studio for Chief Group Services.">
+<meta name="color-scheme" content="dark">
+<title>Signal — AI Tender Automation · CJ Studio × Chief Group Services</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230b1117'/%3E%3Ccircle cx='16' cy='16' r='9' fill='none' stroke='%23f2a13c' stroke-width='1.6'/%3E%3Ccircle cx='16' cy='16' r='3.2' fill='%23f2a13c'/%3E%3Cpath d='M16 16 L23 9' stroke='%2346c98b' stroke-width='1.6' stroke-linecap='round'/%3E%3C/svg%3E">
+<style>
+  :root {
+    --bg: #090d12;
+    --bg-2: #0d141b;
+    --panel: #111a23;
+    --panel-2: #16212c;
+    --line: #22303c;
+    --line-soft: #1a2530;
+    --ink: #eaf1f5;
+    --ink-2: #b3c1cc;
+    --muted: #728695;
+    --amber: #f2a13c;
+    --amber-dim: #7a5527;
+    --amber-glow: rgba(242,161,60,.16);
+    --go: #46c98b;
+    --go-dim: #1c3a2e;
+    --flag: #e5675a;
+    --flag-dim: #3a201d;
+    --mono: ui-monospace, "SF Mono", "SFMono-Regular", "Cascadia Mono", Menlo, Consolas, monospace;
+    --sans: system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    --maxw: 1120px;
+    --ease: cubic-bezier(.2,.7,.2,1);
+  }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--ink);
+    font-family: var(--sans);
+    line-height: 1.62;
+    -webkit-font-smoothing: antialiased;
+    overflow-x: hidden;
+  }
+  ::selection { background: var(--amber); color: #10160c; }
+  a { color: inherit; }
+  .wrap { width: 100%; max-width: var(--maxw); margin: 0 auto; padding: 0 28px; }
+
+  h1, h2, h3, h4 { letter-spacing: -0.025em; line-height: 1.08; text-wrap: balance; margin: 0; }
+  .mono { font-family: var(--mono); }
+  .eyebrow {
+    font-family: var(--mono); font-size: 12px; letter-spacing: .22em;
+    text-transform: uppercase; color: var(--muted); margin: 0;
+  }
+  .amber { color: var(--amber); }
+
+  /* ============ Scanline / grain overlay ============ */
+  .fx-grain {
+    position: fixed; inset: 0; z-index: 1; pointer-events: none; opacity: .04;
+    background-image: repeating-linear-gradient(0deg, #fff 0 1px, transparent 1px 3px);
+    mix-blend-mode: overlay;
+  }
+
+  /* ============ Nav ============ */
+  nav {
+    position: sticky; top: 0; z-index: 40;
+    backdrop-filter: blur(10px);
+    background: color-mix(in srgb, var(--bg) 78%, transparent);
+    border-bottom: 1px solid var(--line-soft);
+  }
+  .nav-in { display: flex; align-items: center; justify-content: space-between; height: 60px; }
+  .logo { display: flex; align-items: center; gap: 11px; font-family: var(--mono); font-size: 13px; letter-spacing: .04em; }
+  .logo .dot { width: 9px; height: 9px; border-radius: 50%; background: var(--amber); box-shadow: 0 0 0 4px var(--amber-glow); animation: pulse 2.4s var(--ease) infinite; }
+  @keyframes pulse { 0%,100%{box-shadow:0 0 0 3px var(--amber-glow)} 50%{box-shadow:0 0 0 8px transparent} }
+  .logo b { color: var(--ink); font-weight: 600; }
+  .logo span { color: var(--muted); }
+  .nav-links { display: flex; gap: 26px; font-family: var(--mono); font-size: 12px; letter-spacing: .04em; }
+  .nav-links a { color: var(--muted); text-decoration: none; transition: color .2s; }
+  .nav-links a:hover { color: var(--amber); }
+  @media (max-width: 720px){ .nav-links{ display:none; } }
+
+  /* ============ Hero ============ */
+  header.hero { position: relative; z-index: 2; overflow: hidden; }
+  #radar { position: absolute; inset: 0; width: 100%; height: 100%; z-index: 0; opacity: .55; }
+  .hero-grad {
+    position: absolute; inset: 0; z-index: 1; pointer-events: none;
+    background:
+      radial-gradient(80% 60% at 78% 8%, var(--amber-glow) 0%, transparent 46%),
+      radial-gradient(60% 60% at 0% 100%, rgba(70,201,139,.08) 0%, transparent 50%),
+      linear-gradient(180deg, transparent 55%, var(--bg) 100%);
+  }
+  .hero-in { position: relative; z-index: 2; padding: 92px 0 96px; }
+  .chip {
+    display: inline-flex; align-items: center; gap: 10px;
+    font-family: var(--mono); font-size: 12px; letter-spacing: .06em;
+    border: 1px solid var(--line); border-radius: 999px; padding: 7px 14px;
+    background: color-mix(in srgb, var(--panel) 70%, transparent); color: var(--ink-2);
+    margin-bottom: 30px;
+  }
+  .chip b { color: var(--amber); font-weight: 600; }
+  .chip .sep { color: var(--muted); }
+  h1 {
+    font-size: clamp(38px, 7.2vw, 88px);
+    font-weight: 800;
+    max-width: 15ch;
+    margin: 0 0 26px;
+  }
+  h1 .line { display: block; overflow: hidden; }
+  h1 .line > span { display: inline-block; will-change: transform; }
+  h1 .glow { color: var(--amber); text-shadow: 0 0 34px var(--amber-glow); }
+  .lede { font-size: clamp(17px, 2.1vw, 22px); color: var(--ink-2); max-width: 58ch; margin: 0 0 40px; }
+  .hero-meta {
+    display: flex; flex-wrap: wrap; gap: 0;
+    border: 1px solid var(--line); border-radius: 14px; overflow: hidden;
+    background: color-mix(in srgb, var(--panel) 55%, transparent);
+    max-width: 760px;
+  }
+  .hero-meta .m {
+    flex: 1 1 150px; padding: 16px 20px; border-right: 1px solid var(--line);
+  }
+  .hero-meta .m:last-child { border-right: none; }
+  .hero-meta .m .k { font-family: var(--mono); font-size: 11px; letter-spacing: .12em; text-transform: uppercase; color: var(--muted); }
+  .hero-meta .m .v { font-size: 15px; color: var(--ink); font-weight: 600; margin-top: 3px; }
+  .hero-meta .m .v.live::before {
+    content:""; display:inline-block; width:7px; height:7px; border-radius:50%;
+    background: var(--go); margin-right:8px; box-shadow: 0 0 8px var(--go); vertical-align: middle;
+  }
+  .scrollcue { margin-top: 46px; font-family: var(--mono); font-size: 11px; letter-spacing:.18em; text-transform:uppercase; color: var(--muted); display:flex; align-items:center; gap:10px; }
+  .scrollcue .bar { width: 42px; height: 1px; background: linear-gradient(90deg, var(--amber), transparent); }
+
+  /* ============ Section scaffold ============ */
+  section { position: relative; z-index: 2; padding: 96px 0; border-top: 1px solid var(--line-soft); }
+  .sec-head { display: flex; align-items: baseline; gap: 14px; margin-bottom: 30px; }
+  .sec-head .idx { font-family: var(--mono); font-size: 12px; color: var(--amber); letter-spacing: .12em; }
+  h2 { font-size: clamp(27px, 4.2vw, 46px); font-weight: 750; max-width: 20ch; }
+  .lead { max-width: 62ch; color: var(--ink-2); font-size: 17px; margin: 18px 0 0; }
+  .lead strong { color: var(--ink); font-weight: 650; }
+
+  /* reveal */
+  .reveal { opacity: 0; transform: translateY(22px); transition: opacity .7s var(--ease), transform .7s var(--ease); }
+  .reveal.in { opacity: 1; transform: none; }
+  .reveal.d1 { transition-delay: .08s; } .reveal.d2 { transition-delay: .16s; } .reveal.d3 { transition-delay: .24s; }
+
+  /* ============ Stats ============ */
+  .stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1px; margin-top: 44px; background: var(--line); border: 1px solid var(--line); border-radius: 16px; overflow: hidden; }
+  .stat { background: var(--bg-2); padding: 30px 24px; }
+  .stat .num { font-size: clamp(34px, 5vw, 52px); font-weight: 800; letter-spacing: -0.04em; font-variant-numeric: tabular-nums; line-height: 1; }
+  .stat .num .u { font-size: .45em; color: var(--amber); font-weight: 700; margin-left: 2px; }
+  .stat .lbl { font-size: 13.5px; color: var(--muted); margin-top: 12px; max-width: 24ch; }
+  @media (max-width: 860px){ .stats{ grid-template-columns: repeat(2,1fr); } }
+
+  /* ============ Interactive pipeline ============ */
+  .pipe-shell { display: grid; grid-template-columns: 1fr 1fr; gap: 40px; margin-top: 48px; align-items: start; }
+  @media (max-width: 900px){ .pipe-shell{ grid-template-columns: 1fr; gap: 8px; } }
+
+  .flow { position: relative; }
+  .flow-rail { position: absolute; left: 21px; top: 10px; bottom: 10px; width: 2px; overflow: hidden; }
+  .flow-rail::before { content:""; position:absolute; inset:0; background: var(--line); }
+  .flow-rail::after {
+    content:""; position:absolute; left:0; width:2px; height: 42px;
+    background: linear-gradient(180deg, transparent, var(--amber), transparent);
+    animation: flow 3.2s linear infinite; filter: drop-shadow(0 0 6px var(--amber));
+  }
+  @keyframes flow { 0%{ top:-42px } 100%{ top:100% } }
+
+  .node {
+    position: relative; display: grid; grid-template-columns: 44px 1fr; gap: 14px;
+    width: 100%; text-align: left; background: transparent; border: none; cursor: pointer;
+    padding: 7px 0; font-family: var(--sans); color: inherit;
+  }
+  .node .bullet {
+    width: 44px; height: 44px; border-radius: 12px; display: grid; place-items: center;
+    background: var(--panel); border: 1px solid var(--line); position: relative; z-index: 2;
+    font-family: var(--mono); font-size: 12px; color: var(--muted); transition: all .25s var(--ease);
+  }
+  .node .body {
+    background: var(--panel); border: 1px solid var(--line); border-radius: 12px;
+    padding: 13px 16px; transition: all .25s var(--ease);
+  }
+  .node .tag { display: block; font-family: var(--mono); font-size: 10.5px; letter-spacing: .12em; text-transform: uppercase; color: var(--muted); }
+  .node .ttl { display: block; font-size: 15.5px; font-weight: 650; margin-top: 3px; letter-spacing: -0.01em; }
+  .node:hover .body { border-color: var(--amber-dim); transform: translateX(3px); }
+  .node:hover .bullet { border-color: var(--amber-dim); color: var(--amber); }
+  .node[aria-selected="true"] .body { border-color: var(--amber); background: var(--panel-2); box-shadow: 0 0 0 1px var(--amber), 0 10px 30px rgba(0,0,0,.4); }
+  .node[aria-selected="true"] .bullet { border-color: var(--amber); color: #10160c; background: var(--amber); box-shadow: 0 0 18px var(--amber-glow); }
+  .node[aria-selected="true"] .tag { color: var(--amber); }
+
+  .node.checkpoint .bullet { border-style: dashed; border-color: var(--amber-dim); color: var(--amber); }
+  .node.checkpoint .body { border-style: dashed; border-color: var(--amber-dim); background: color-mix(in srgb, var(--amber-glow) 40%, var(--panel)); }
+  .node.checkpoint .tag { color: var(--amber); }
+
+  .stage-label {
+    display: flex; align-items: center; gap: 12px; margin: 26px 0 12px; padding-left: 2px;
+  }
+  .stage-label:first-child { margin-top: 0; }
+  .stage-label .s-num { font-family: var(--mono); font-size: 11px; color: var(--amber); border:1px solid var(--amber-dim); border-radius:6px; padding:3px 8px; letter-spacing:.1em; }
+  .stage-label .s-txt { font-family: var(--mono); font-size: 12px; letter-spacing: .14em; text-transform: uppercase; color: var(--ink-2); }
+  .stage-label .s-cad { margin-left: auto; font-family: var(--mono); font-size: 11px; color: var(--muted); }
+
+  /* Readout panel */
+  .readout {
+    position: sticky; top: 88px;
+    background: linear-gradient(180deg, var(--panel-2), var(--panel));
+    border: 1px solid var(--line); border-radius: 18px; overflow: hidden;
+    box-shadow: 0 24px 60px rgba(0,0,0,.4);
+  }
+  @media (max-width: 900px){ .readout{ position: relative; top: 0; margin: 14px 0 30px; } }
+  .readout-top {
+    display: flex; align-items: center; gap: 8px; padding: 14px 18px;
+    border-bottom: 1px solid var(--line); background: rgba(0,0,0,.2);
+    font-family: var(--mono); font-size: 11px; letter-spacing: .1em; text-transform: uppercase; color: var(--muted);
+  }
+  .readout-top .led { width: 8px; height: 8px; border-radius: 50%; background: var(--go); box-shadow: 0 0 8px var(--go); }
+  .readout-top .rt-right { margin-left: auto; color: var(--muted); }
+  .readout-main { padding: 26px 24px 28px; min-height: 300px; }
+  .ro-tag { font-family: var(--mono); font-size: 11px; letter-spacing: .16em; text-transform: uppercase; color: var(--amber); }
+  .ro-ttl { font-size: clamp(22px, 3vw, 30px); font-weight: 750; margin: 10px 0 14px; letter-spacing: -0.02em; }
+  .ro-desc { color: var(--ink-2); font-size: 16px; }
+  .ro-meta { display: grid; grid-template-columns: 1fr 1fr; gap: 1px; margin-top: 22px; background: var(--line); border: 1px solid var(--line); border-radius: 12px; overflow: hidden; }
+  .ro-meta .cell { background: var(--panel); padding: 13px 15px; }
+  .ro-meta .cell .k { font-family: var(--mono); font-size: 10px; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); }
+  .ro-meta .cell .v { font-size: 14px; color: var(--ink); margin-top: 3px; font-weight: 600; }
+  .ro-meta .cell .v.go { color: var(--go); }
+  .ro-hint { margin-top: 18px; font-family: var(--mono); font-size: 11px; color: var(--muted); letter-spacing:.03em; }
+  .ro-fade { animation: roIn .45s var(--ease); }
+  @keyframes roIn { from{ opacity:0; transform: translateY(8px);} to{ opacity:1; transform:none; } }
+
+  /* ============ Output cards ============ */
+  .cards { display: grid; grid-template-columns: repeat(3,1fr); gap: 18px; margin-top: 46px; }
+  @media (max-width: 820px){ .cards{ grid-template-columns: 1fr; } }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 16px; padding: 26px; transition: transform .3s var(--ease), border-color .3s; }
+  .card:hover { transform: translateY(-4px); border-color: var(--amber-dim); }
+  .card .ic { width: 40px; height: 40px; border-radius: 10px; display: grid; place-items: center; background: var(--go-dim); color: var(--go); margin-bottom: 16px; font-size: 18px; }
+  .card h4 { font-size: 18px; font-weight: 700; }
+  .card p { margin: 10px 0 0; color: var(--muted); font-size: 15px; }
+
+  /* ============ Edge ============ */
+  .edge { display: grid; grid-template-columns: repeat(2,1fr); gap: 18px; margin-top: 46px; }
+  @media (max-width: 820px){ .edge{ grid-template-columns: 1fr; } }
+  .edge-item { display: grid; grid-template-columns: 40px 1fr; gap: 16px; background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 24px; }
+  .edge-item .en { font-family: var(--mono); font-size: 13px; color: var(--amber); padding-top: 4px; }
+  .edge-item h4 { font-size: 17px; }
+  .edge-item p { margin: 8px 0 0; color: var(--muted); font-size: 14.5px; }
+
+  /* ============ Roadmap ============ */
+  .road { display: grid; gap: 18px; margin-top: 46px; }
+  .phase { display: grid; grid-template-columns: 190px 1fr; gap: 30px; background: var(--panel); border: 1px solid var(--line); border-radius: 18px; padding: 30px; position: relative; overflow: hidden; }
+  @media (max-width: 760px){ .phase{ grid-template-columns: 1fr; gap: 12px; } }
+  .phase::before { content:""; position:absolute; left:0; top:0; bottom:0; width:3px; background: var(--muted); }
+  .phase.live::before { background: var(--go); }
+  .phase.next::before { background: var(--amber); }
+  .phase.future::before { background: var(--line); }
+  .phase .when { font-family: var(--mono); font-size: 12px; letter-spacing: .08em; text-transform: uppercase; }
+  .phase .when .status { display:inline-flex; align-items:center; gap:8px; padding:5px 11px; border-radius:999px; border:1px solid var(--line); }
+  .phase.live .when .status { color: var(--go); border-color: var(--go-dim); }
+  .phase.next .when .status { color: var(--amber); border-color: var(--amber-dim); }
+  .phase.future .when .status { color: var(--muted); }
+  .phase .when .status .d { width:7px; height:7px; border-radius:50%; background: currentColor; }
+  .phase h4 { font-size: 20px; margin-top: 6px; }
+  .phase p { margin: 10px 0 0; color: var(--ink-2); font-size: 15.5px; }
+  .phase .note { margin-top: 14px; padding-top: 14px; border-top: 1px dashed var(--line); font-size: 13.5px; color: var(--muted); }
+
+  /* ============ Next steps ============ */
+  #next { background:
+      radial-gradient(70% 90% at 90% 0%, var(--amber-glow) 0%, transparent 45%),
+      var(--bg-2);
+    border-radius: 0;
+  }
+  .steps { display: grid; gap: 14px; margin-top: 40px; }
+  .step { display: grid; grid-template-columns: 54px 1fr; gap: 20px; align-items: start; padding: 22px 24px; background: var(--panel); border: 1px solid var(--line); border-radius: 14px; }
+  .step .n { font-family: var(--mono); font-size: 22px; color: var(--amber); font-weight: 600; }
+  .step h4 { font-size: 17px; }
+  .step p { margin: 6px 0 0; color: var(--ink-2); font-size: 15px; }
+  .cta { margin-top: 42px; display: flex; flex-wrap: wrap; gap: 16px; align-items: center; }
+  .cta .btn {
+    display: inline-flex; align-items: center; gap: 10px; font-family: var(--mono); font-size: 13px; letter-spacing: .04em;
+    background: var(--amber); color: #120d05; text-decoration: none; padding: 15px 24px; border-radius: 10px; font-weight: 600;
+    transition: transform .2s var(--ease), box-shadow .2s; box-shadow: 0 8px 30px var(--amber-glow);
+  }
+  .cta .btn:hover { transform: translateY(-2px); box-shadow: 0 12px 40px var(--amber-glow); }
+  .cta .aside { font-family: var(--mono); font-size: 12px; color: var(--muted); }
+
+  /* ============ Footer ============ */
+  footer { position: relative; z-index: 2; border-top: 1px solid var(--line-soft); padding: 40px 0 60px; }
+  .foot-in { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 14px; font-family: var(--mono); font-size: 12px; color: var(--muted); letter-spacing: .03em; }
+  .foot-in b { color: var(--ink-2); font-weight: 600; }
+  .disc { font-size: 11px; color: var(--muted); max-width: 52ch; }
+
+  @media (prefers-reduced-motion: reduce) {
+    * { animation: none !important; scroll-behavior: auto !important; }
+    .reveal { opacity: 1; transform: none; }
+  }
+</style>
+</head>
+<body>
+<div class="fx-grain" aria-hidden="true"></div>
+
+<nav>
+  <div class="wrap nav-in">
+    <div class="logo"><span class="dot"></span><b>SIGNAL</b><span>/ Tender Intelligence</span></div>
+    <div class="nav-links">
+      <a href="#problem">Problem</a>
+      <a href="#system">System</a>
+      <a href="#outputs">Output</a>
+      <a href="#roadmap">Roadmap</a>
+      <a href="#next">Next steps</a>
+    </div>
+  </div>
+</nav>
+
+<header class="hero">
+  <canvas id="radar" aria-hidden="true"></canvas>
+  <div class="hero-grad" aria-hidden="true"></div>
+  <div class="wrap hero-in">
+    <div class="chip"><b>CJ Studio</b><span class="sep">×</span>Chief Group Services</div>
+    <h1>
+      <span class="line"><span>In tendering, the</span></span>
+      <span class="line"><span class="glow">fastest qualified</span></span>
+      <span class="line"><span>bidder sets the pace.</span></span>
+    </h1>
+    <p class="lede">A working automation that watches every relevant Queensland tender source around the clock, reads each opportunity with AI, filters it to your 50&nbsp;km service zone, and hands your team a qualified, bid-ready brief — before competitors finish their morning scan.</p>
+    <div class="hero-meta">
+      <div class="m"><div class="k">Prepared for</div><div class="v">Chief Group Services</div></div>
+      <div class="m"><div class="k">Sector</div><div class="v">Security &amp; Cleaning</div></div>
+      <div class="m"><div class="k">Region</div><div class="v">South East QLD</div></div>
+      <div class="m"><div class="k">Status</div><div class="v live">Live &amp; running</div></div>
+    </div>
+    <div class="scrollcue"><span class="bar"></span> Scroll to explore the system</div>
+  </div>
+</header>
+
+<section id="problem">
+  <div class="wrap">
+    <div class="sec-head reveal"><span class="idx">01</span><p class="eyebrow">The bottleneck</p></div>
+    <h2 class="reveal">It's a speed problem — not a sourcing problem.</h2>
+    <p class="lead reveal d1">New security and cleaning contracts appear every day across AusTender, VendorPanel and council portals. Finding them means <strong>checking every portal by hand, opening each listing, and reading 100-page packs</strong> just to decide if it's worth pursuing. By the time that's done, the best-positioned competitor is already drafting. The edge isn't access to tenders — everyone has that. It's <strong>the hours between a tender going live and a qualified team deciding to bid.</strong></p>
+    <div class="stats reveal d2">
+      <div class="stat"><div class="num" data-count="3">0</div><div class="lbl">tender sources monitored in parallel</div></div>
+      <div class="stat"><div class="num" data-count="24">0<span class="u">/7</span></div><div class="lbl">continuous watch — nights and weekends included</div></div>
+      <div class="stat"><div class="num" data-count="50">0<span class="u">km</span></div><div class="lbl">service-zone filter around Brisbane &amp; Gold Coast</div></div>
+      <div class="stat"><div class="num" data-count="600">0<span class="u">+</span></div><div class="lbl">QLD suburbs &amp; postcodes in the zone whitelist</div></div>
+    </div>
+  </div>
+</section>
+
+<section id="system">
+  <div class="wrap">
+    <div class="sec-head reveal"><span class="idx">02</span><p class="eyebrow">How it works · interactive</p></div>
+    <h2 class="reveal">Two AI stages, one human checkpoint.</h2>
+    <p class="lead reveal d1">The system runs as two connected pipelines. The first finds and qualifies every opportunity automatically; a team member gives a one-click go-ahead; the second performs a deep, bid-focused read of the full pack. <strong>Select any step</strong> to see what it does.</p>
+
+    <div class="pipe-shell">
+      <div class="flow reveal d1">
+        <div class="flow-rail" aria-hidden="true"></div>
+        <div id="flowNodes" role="listbox" aria-label="Pipeline steps"></div>
+      </div>
+      <div class="readout reveal d2" aria-live="polite">
+        <div class="readout-top"><span class="led"></span> Readout <span class="rt-right" id="roIndex">STEP 01 / 12</span></div>
+        <div class="readout-main">
+          <div id="roContent" class="ro-fade"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="outputs">
+  <div class="wrap">
+    <div class="sec-head reveal"><span class="idx">03</span><p class="eyebrow">What your team receives</p></div>
+    <h2 class="reveal">A ranked pipeline every morning — not a blank search bar.</h2>
+    <div class="cards">
+      <div class="card reveal d1"><div class="ic">▤</div><h4>A prioritised tender board</h4><p>One sheet, every live opportunity, ranked A–C with location, deadline, days-to-close, budget and red flags already filled in.</p></div>
+      <div class="card reveal d2"><div class="ic">✎</div><h4>A ready-to-edit bid draft</h4><p>A first-pass Expression of Interest attached to every qualified tender — a starting point, never a blank page.</p></div>
+      <div class="card reveal d3"><div class="ic">◈</div><h4>A full bid-intelligence brief</h4><p>For approved tenders: compliance checklist, pricing structure, scope, KPIs, submission rules and a recommended strategy.</p></div>
+    </div>
+  </div>
+</section>
+
+<section id="edge">
+  <div class="wrap">
+    <div class="sec-head reveal"><span class="idx">04</span><p class="eyebrow">Why it wins</p></div>
+    <h2 class="reveal">The advantage is built into how it filters.</h2>
+    <div class="edge">
+      <div class="edge-item reveal d1"><div class="en">A</div><div><h4>It only surfaces winnable work</h4><p>The 50&nbsp;km zone gate means the board is never cluttered with jobs you can't service. Signal, not noise.</p></div></div>
+      <div class="edge-item reveal d1"><div class="en">B</div><div><h4>It reads faster than a competitor can</h4><p>AI digests a 100-page pack in seconds and surfaces the deal-breakers a person would spend an afternoon finding.</p></div></div>
+      <div class="edge-item reveal d2"><div class="en">C</div><div><h4>It never sleeps and never forgets</h4><p>Hourly scanning with duplicate suppression means nothing slips through and nothing is reviewed twice.</p></div></div>
+      <div class="edge-item reveal d2"><div class="en">D</div><div><h4>It keeps a human in command</h4><p>The AI does the finding and reading; your team keeps the judgement call on what's worth bidding.</p></div></div>
+    </div>
+  </div>
+</section>
+
+<section id="roadmap">
+  <div class="wrap">
+    <div class="sec-head reveal"><span class="idx">05</span><p class="eyebrow">Where it goes next</p></div>
+    <h2 class="reveal">From assisted to fully automated.</h2>
+    <p class="lead reveal d1">What's live today already removes the heavy lifting. The next phases close the remaining manual gaps — moving the system from <strong>finding tenders for your team</strong> to <strong>preparing complete, submission-ready bids on its own.</strong></p>
+    <div class="road">
+      <div class="phase live reveal d1">
+        <div class="when"><span class="status"><span class="d"></span>Live now</span></div>
+        <div><h4>Assisted pipeline</h4><p>Automated discovery, AI triage, zone filtering, first-pass drafts and deep bid analysis — with a one-click human approval in the middle.</p></div>
+      </div>
+      <div class="phase next reveal d1">
+        <div class="when"><span class="status"><span class="d"></span>Phase 2</span></div>
+        <div><h4>Hands-off intake &amp; auto-qualification</h4><p>Top-tier, in-zone tenders are auto-approved by confidence rules, and the full tender pack is pulled from each portal automatically — removing the manual log-in, download and upload step entirely.</p><div class="note">Portal downloads sit behind account log-ins and terms of use. We automate them with securely stored credentials and per-portal handling, with a fallback alert whenever a portal needs human sign-off — so nothing silently stalls.</div></div>
+      </div>
+      <div class="phase future reveal d2">
+        <div class="when"><span class="status"><span class="d"></span>Phase 3</span></div>
+        <div><h4>Bid drafting in your voice, into your systems</h4><p>Trained on Chief Group's past submissions, the AI produces complete draft responses in your tone and format, delivered straight into your CRM or bid folder — leaving your team to refine and submit, not build from scratch.</p></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="next">
+  <div class="wrap">
+    <div class="sec-head reveal"><span class="idx">06</span><p class="eyebrow amber">Next steps</p></div>
+    <h2 class="reveal">What we'd need to move to Phase 2.</h2>
+    <p class="lead reveal d1">The engine is already proven and running. To progress it toward full automation, we'd align on three things with your team.</p>
+    <div class="steps">
+      <div class="step reveal d1"><div class="n">01</div><div><h4>Compliance dealbreakers</h4><p>The certifications, insurance thresholds and licences the AI should treat as automatic red flags.</p></div></div>
+      <div class="step reveal d1"><div class="n">02</div><div><h4>3–5 past tender submissions</h4><p>Pricing redacted — used to train the drafting AI on Chief Group's tone and format.</p></div></div>
+      <div class="step reveal d2"><div class="n">03</div><div><h4>Portal &amp; system access</h4><p>The accounts to automate downloads from, and the CRM or folder where finished drafts should land.</p></div></div>
+    </div>
+    <div class="cta reveal d2">
+      <a class="btn" href="mailto:?subject=AI%20Tender%20Automation%20—%20Phase%202%20alignment">Book the 15-minute alignment call →</a>
+      <span class="aside">15 minutes to scope Phase 2 and confirm automation targets.</span>
+    </div>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap foot-in">
+    <span>Prepared by <b>CJ Studio</b> · AI Tender Automation</span>
+    <span class="disc">Metrics shown are configuration facts of the live system. Commercial figures to be confirmed against client data.</span>
+  </div>
+</footer>
+
+<script>
+(function(){
+  "use strict";
+  var reduce = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+  /* ---------- Pipeline data ---------- */
+  var NODES = [
+    { stage:"S1", label:"Discovery & Triage", cadence:"runs hourly", checkpoint:false, id:"n1",
+      tag:"SOURCES", ttl:"Scan every source",
+      desc:"AusTender, VendorPanel and Brisbane City Council are pulled in parallel every hour and normalised into a single clean stream of opportunities.",
+      meta:[["Inputs","3 live feeds"],["Cadence","Every 60 min"]] },
+    { checkpoint:false, id:"n2", tag:"FILTER", ttl:"Filter the noise",
+      desc:"A keyword pass keeps only security, guarding, patrol, CCTV, cleaning and facilities work, and drops everything unrelated before a cent of AI cost is spent.",
+      meta:[["Keeps","Security · Cleaning"],["Drops","IT · Construction"]] },
+    { checkpoint:false, id:"n3", tag:"DEDUPE", ttl:"Suppress duplicates",
+      desc:"A rolling memory of thousands of previously seen listings ensures the same tender is never processed or reviewed twice.",
+      meta:[["Memory","~8,000 items"],["Result","Zero repeats"]] },
+    { checkpoint:false, id:"n4", tag:"CLASSIFY", ttl:"AI reads & tiers each one",
+      desc:"An AI model reads each tender and extracts service type, location, budget, contract length, hours, deadline and red flags — then assigns an A / B / C / Reject priority tier.",
+      meta:[["Extracts","12+ fields"],["Output","A / B / C tier"]] },
+    { checkpoint:false, id:"n5", tag:"GEO-GATE", ttl:"50 km service-zone gate",
+      desc:"An authoritative whitelist of ~600 QLD suburbs and postcodes keeps only work within your 50 km reach and hard-drops anything interstate.",
+      meta:[["Whitelist","600+ places"],["Interstate","Rejected"]] },
+    { checkpoint:false, id:"n6", tag:"DRAFT", ttl:"Draft the first response",
+      desc:"A first-pass Expression of Interest is generated for every qualified tender, giving your team a warm starting point instead of a blank page.",
+      meta:[["Produces","Draft EOI"],["Tone","Professional"]] },
+    { checkpoint:false, id:"n7", tag:"OUTPUT", ttl:"Log to the triage board",
+      desc:"Every qualified opportunity lands on a ranked Google Sheet with all fields filled in — ready for a fast human review.",
+      meta:[["Lands on","Triage board"],["State","Pending review"]] },
+    { checkpoint:true, id:"nC", tag:"CHECKPOINT", ttl:"Human go / no-go",
+      desc:"A reviewer scans the ranked board and marks the tenders worth pursuing as Approved. That single tick is the trigger for deep analysis — your team keeps control without doing any searching or reading.",
+      meta:[["Action","One click"],["Phase 2","Auto-approve tier A"]] },
+    { stage:"S2", label:"Deep Analysis", cadence:"on approval", checkpoint:false, id:"n8",
+      tag:"INGEST", ttl:"Open the full pack",
+      desc:"On approval, the system pulls the complete tender pack — PDFs, requirement and pricing spreadsheets, even zipped bundles — and reads every file.",
+      meta:[["Handles","PDF · XLSX · ZIP"],["Trigger","On approval"]] },
+    { checkpoint:false, id:"n9", tag:"EXTRACT", ttl:"Extract what wins bids",
+      desc:"AI pulls the contract-critical detail: compliance and licensing requirements, the pricing/rate structure, full scope of work, KPIs & SLAs, submission rules and evaluation weightings.",
+      meta:[["Depth","Full document"],["Focus","Bid-critical"]] },
+    { checkpoint:false, id:"n10", tag:"STRATEGY", ttl:"Recommend a bid strategy",
+      desc:"The system returns practical, tender-specific positioning advice — how to frame a competitive, winning response.",
+      meta:[["Output","Strategy brief"],["Tailored","Per tender"]] },
+    { checkpoint:false, id:"n11", tag:"NOTIFY", ttl:"Alert the team",
+      desc:"The moment analysis is ready — or if a document is still needed — the team is pinged on Slack, so nothing waits in a queue no one is watching.",
+      meta:[["Channel","Slack"],["Latency","Real-time"]] }
+  ];
+
+  var flowEl = document.getElementById("flowNodes");
+  var roContent = document.getElementById("roContent");
+  var roIndex = document.getElementById("roIndex");
+  var total = NODES.length;
+  var buttons = [];
+
+  function esc(s){ return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;"); }
+
+  NODES.forEach(function(n, i){
+    if (n.stage){
+      var sl = document.createElement("div");
+      sl.className = "stage-label";
+      sl.innerHTML = '<span class="s-num">'+(n.stage==="S1"?"STAGE 1":"STAGE 2")+'</span>'
+        + '<span class="s-txt">'+esc(n.label)+'</span>'
+        + '<span class="s-cad">'+esc(n.cadence)+'</span>';
+      flowEl.appendChild(sl);
+    }
+    var b = document.createElement("button");
+    b.className = "node" + (n.checkpoint ? " checkpoint" : "");
+    b.setAttribute("role","option");
+    b.setAttribute("aria-selected", i===0 ? "true":"false");
+    b.dataset.i = i;
+    var badge = n.checkpoint ? "◆" : String(i+1).padStart(2,"0");
+    b.innerHTML = '<span class="bullet">'+badge+'</span>'
+      + '<span class="body"><span class="tag">'+esc(n.tag)+'</span><span class="ttl">'+esc(n.ttl)+'</span></span>';
+    b.addEventListener("click", function(){ select(i); });
+    flowEl.appendChild(b);
+    buttons.push(b);
+  });
+
+  function render(n, i){
+    var metaHtml = n.meta.map(function(m){
+      var go = (i===7) ? " go" : "";
+      return '<div class="cell"><div class="k">'+esc(m[0])+'</div><div class="v'+go+'">'+esc(m[1])+'</div></div>';
+    }).join("");
+    roContent.innerHTML =
+      '<div class="ro-tag">'+esc(n.tag)+'</div>'
+      + '<div class="ro-ttl">'+esc(n.ttl)+'</div>'
+      + '<div class="ro-desc">'+esc(n.desc)+'</div>'
+      + '<div class="ro-meta">'+metaHtml+'</div>'
+      + '<div class="ro-hint">'+(n.checkpoint ? "◆ The only human touchpoint in the flow." : "Automated · no human input required")+'</div>';
+    roContent.classList.remove("ro-fade"); void roContent.offsetWidth; roContent.classList.add("ro-fade");
+    roIndex.textContent = "STEP "+String(i+1).padStart(2,"0")+" / "+String(total).padStart(2,"0");
+  }
+
+  function select(i){
+    buttons.forEach(function(b,j){ b.setAttribute("aria-selected", j===i ? "true":"false"); });
+    render(NODES[i], i);
+  }
+  select(0);
+
+  /* ---------- Reveal on scroll ---------- */
+  if ("IntersectionObserver" in window && !reduce){
+    var io = new IntersectionObserver(function(entries){
+      entries.forEach(function(e){ if(e.isIntersecting){ e.target.classList.add("in"); io.unobserve(e.target); } });
+    }, { threshold: 0.12, rootMargin: "0px 0px -8% 0px" });
+    document.querySelectorAll(".reveal").forEach(function(el){ io.observe(el); });
+  } else {
+    document.querySelectorAll(".reveal").forEach(function(el){ el.classList.add("in"); });
+  }
+
+  /* ---------- Count-up stats ---------- */
+  function countUp(el){
+    var target = parseInt(el.dataset.count,10);
+    var suffix = el.querySelector(".u");
+    var suffixHtml = suffix ? suffix.outerHTML : "";
+    var dur = 1100, start = null;
+    function frame(ts){
+      if(!start) start = ts;
+      var p = Math.min((ts-start)/dur, 1);
+      var eased = 1 - Math.pow(1-p, 3);
+      var val = Math.round(eased * target);
+      el.innerHTML = val + suffixHtml;
+      if(p<1) requestAnimationFrame(frame);
+    }
+    requestAnimationFrame(frame);
+  }
+  if ("IntersectionObserver" in window && !reduce){
+    var sio = new IntersectionObserver(function(entries){
+      entries.forEach(function(e){ if(e.isIntersecting){ countUp(e.target); sio.unobserve(e.target); } });
+    }, { threshold: 0.6 });
+    document.querySelectorAll(".num[data-count]").forEach(function(el){ sio.observe(el); });
+  }
+
+  /* ---------- Hero headline rise ---------- */
+  if(!reduce){
+    var spans = document.querySelectorAll("h1 .line > span");
+    spans.forEach(function(s, i){
+      s.style.transform = "translateY(105%)";
+      s.style.transition = "transform .9s cubic-bezier(.2,.8,.2,1) "+(0.15 + i*0.11)+"s";
+    });
+    requestAnimationFrame(function(){ requestAnimationFrame(function(){
+      spans.forEach(function(s){ s.style.transform = "translateY(0)"; });
+    });});
+  }
+
+  /* ---------- Ambient radar canvas ---------- */
+  var cv = document.getElementById("radar");
+  if(cv && !reduce){
+    var ctx = cv.getContext("2d"), W, H, dpr, dots = [], t = 0;
+    function resize(){
+      dpr = Math.min(window.devicePixelRatio||1, 2);
+      W = cv.clientWidth; H = cv.clientHeight;
+      cv.width = W*dpr; cv.height = H*dpr; ctx.setTransform(dpr,0,0,dpr,0,0);
+      dots = [];
+      var n = Math.min(46, Math.floor(W/26));
+      for(var i=0;i<n;i++){ dots.push({ x:Math.random()*W, y:Math.random()*H, r:Math.random()*1.6+0.4, s:Math.random()*0.25+0.05, ph:Math.random()*6.28 }); }
+    }
+    function draw(){
+      t += 0.006;
+      ctx.clearRect(0,0,W,H);
+      // grid
+      ctx.strokeStyle = "rgba(120,150,170,0.05)"; ctx.lineWidth = 1;
+      var gap = 46;
+      for(var x=0;x<W;x+=gap){ ctx.beginPath(); ctx.moveTo(x,0); ctx.lineTo(x,H); ctx.stroke(); }
+      for(var y=0;y<H;y+=gap){ ctx.beginPath(); ctx.moveTo(0,y); ctx.lineTo(W,y); ctx.stroke(); }
+      // sweep origin near top-right
+      var ox = W*0.82, oy = H*0.14;
+      var ang = t*0.8;
+      var grd = ctx.createConicGradient ? null : null;
+      // sweep beam
+      ctx.save();
+      ctx.translate(ox,oy);
+      for(var k=0;k<26;k++){
+        var a = ang - k*0.028;
+        var alpha = (1 - k/26) * 0.10;
+        ctx.strokeStyle = "rgba(242,161,60,"+alpha+")";
+        ctx.lineWidth = 2;
+        ctx.beginPath(); ctx.moveTo(0,0);
+        ctx.lineTo(Math.cos(a)*Math.max(W,H), Math.sin(a)*Math.max(W,H));
+        ctx.stroke();
+      }
+      ctx.restore();
+      // rings
+      ctx.strokeStyle = "rgba(120,150,170,0.06)";
+      for(var rr=1; rr<=4; rr++){ ctx.beginPath(); ctx.arc(ox,oy, rr*120, 0, 6.2832); ctx.stroke(); }
+      // dots
+      dots.forEach(function(d){
+        d.x += d.s; if(d.x > W+4) d.x = -4;
+        var tw = 0.5 + 0.5*Math.sin(t*2 + d.ph);
+        ctx.fillStyle = "rgba(160,190,205,"+(0.10+tw*0.22)+")";
+        ctx.beginPath(); ctx.arc(d.x, d.y, d.r, 0, 6.2832); ctx.fill();
+      });
+      requestAnimationFrame(draw);
+    }
+    resize(); draw();
+    window.addEventListener("resize", resize);
+  }
+})();
+</script>
+</body>
+</html>
