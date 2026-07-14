@@ -1,0 +1,319 @@
+{
+  "name": "Tender Scraping Workflow v6 (HTML Extraction)",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "hours",
+              "hoursInterval": 6
+            }
+          ]
+        }
+      },
+      "id": "e1f18838-89f5-4428-98e3-0c460d37e4d8",
+      "name": "Schedule Trigger",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1,
+      "position": [0, 0]
+    },
+    {
+      "parameters": {
+        "url": "https://www.tenders.gov.au/public_data/rss/rss.xml",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "User-Agent",
+              "value": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "6d3a84e6-d922-491c-b715-db2c219602a6",
+      "name": "Fetch AusTender RSS",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [200, 0]
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "id": "xml-node",
+      "name": "Convert XML to JSON",
+      "type": "n8n-nodes-base.xml",
+      "typeVersion": 1,
+      "position": [400, 0]
+    },
+    {
+      "parameters": {
+        "fieldToSplitOut": "rss.channel.item",
+        "options": {}
+      },
+      "id": "item-lists-node",
+      "name": "Split Tender Items",
+      "type": "n8n-nodes-base.itemLists",
+      "typeVersion": 3,
+      "position": [600, 0]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{ $json.title }}",
+              "operation": "contains",
+              "value2": "security"
+            },
+            {
+              "value1": "={{ $json.title }}",
+              "operation": "contains",
+              "value2": "cleaning"
+            }
+          ]
+        },
+        "combineConditions": "OR"
+      },
+      "id": "a98a0b5f-5cfd-4a11-b1e1-1c322b7c6c74",
+      "name": "Filter Security/Cleaning",
+      "type": "n8n-nodes-base.filter",
+      "typeVersion": 2,
+      "position": [800, 0]
+    },
+    {
+      "parameters": {
+        "url": "={{ $json.link }}",
+        "responseFormat": "text",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "User-Agent",
+              "value": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "f5f543c7-1d8f-43b6-a577-ffc297c11f77",
+      "name": "Download Webpage",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [1000, 0]
+    },
+    {
+      "parameters": {
+        "operation": "extract",
+        "sourceData": "json",
+        "jsonPropertyName": "data",
+        "extractionValues": {
+          "values": [
+            {
+              "key": "text",
+              "cssSelector": "body",
+              "returnValue": "text",
+              "returnArray": false
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "d0e12d1b-8519-4cb5-b467-331139dc7b18",
+      "name": "Extract HTML Text",
+      "type": "n8n-nodes-base.html",
+      "typeVersion": 1,
+      "position": [1200, 0]
+    },
+    {
+      "parameters": {
+        "prompt": "=Read the following tender text and extract the details.\n\nTender Text: {{ $json.text }}\n\nOutput exactly this format:\n**Summary:** [1 paragraph summary of the job]\n**Budget/Value:** [Extracted budget or 'Not Listed']\n**Deadlines:** [Submission closing date and time]\n**Go/No-Go Red Flags:** [List any mandatory ISO certifications, union requirements, or minimum insurance thresholds. If none, write 'None found'.]"
+      },
+      "id": "3bd427a1-5ab9-42b4-82a8-0f5a7d65b1cd",
+      "name": "Basic LLM Chain",
+      "type": "@n8n/n8n-nodes-langchain.chainLlm",
+      "typeVersion": 1,
+      "position": [1400, 0]
+    },
+    {
+      "parameters": {
+        "model": "gpt-4o"
+      },
+      "id": "18f91db7-8b43-4cb5-9c55-320d757d5e46",
+      "name": "OpenAI Chat Model",
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1,
+      "position": [1400, 200]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "893c4b12-9c3a-4a2a-b731-52e6981881b2",
+              "name": "Tender Title",
+              "value": "={{ $node[\"Filter Security/Cleaning\"].json.title }}",
+              "type": "string"
+            },
+            {
+              "id": "f8a93721-e0c4-4638-b7db-a14a38dfc73b",
+              "name": "Tender Link",
+              "value": "={{ $node[\"Filter Security/Cleaning\"].json.link }}",
+              "type": "string"
+            },
+            {
+              "id": "e0b16892-9a3d-4c55-a22a-f8c5c369e4a3",
+              "name": "AI Output",
+              "value": "={{ $json.text }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "edit-fields-1",
+      "name": "Format Data for Sheets",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.2,
+      "position": [1600, 0]
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "",
+          "mode": "id"
+        },
+        "options": {
+          "mappingMode": "autoMapInputData"
+        }
+      },
+      "id": "google-sheets-1",
+      "name": "Google Sheets",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.2,
+      "position": [1800, 0]
+    }
+  ],
+  "connections": {
+    "Schedule Trigger": {
+      "main": [
+        [
+          {
+            "node": "Fetch AusTender RSS",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch AusTender RSS": {
+      "main": [
+        [
+          {
+            "node": "Convert XML to JSON",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Convert XML to JSON": {
+      "main": [
+        [
+          {
+            "node": "Split Tender Items",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Split Tender Items": {
+      "main": [
+        [
+          {
+            "node": "Filter Security/Cleaning",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Filter Security/Cleaning": {
+      "main": [
+        [
+          {
+            "node": "Download Webpage",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Download Webpage": {
+      "main": [
+        [
+          {
+            "node": "Extract HTML Text",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract HTML Text": {
+      "main": [
+        [
+          {
+            "node": "Basic LLM Chain",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Basic LLM Chain": {
+      "main": [
+        [
+          {
+            "node": "Format Data for Sheets",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Data for Sheets": {
+      "main": [
+        [
+          {
+            "node": "Google Sheets",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenAI Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Basic LLM Chain",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {}
+}
