@@ -1,0 +1,13 @@
+{
+  "name": "vendorpanel-robot",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Free GitHub Actions browser robot that logs into VendorPanel, downloads a tender pack, and hands off to n8n.",
+  "main": "download.js",
+  "scripts": {
+    "download": "node download.js"
+  },
+  "dependencies": {
+    "playwright": "^1.48.0"
+  }
+}

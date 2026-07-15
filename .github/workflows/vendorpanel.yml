@@ -1,0 +1,65 @@
+name: VendorPanel download robot
+
+# Runs the browser robot that logs into VendorPanel, downloads a tender
+# document pack, and hands it off to your n8n webhook.
+#
+# THREE ways to trigger it:
+#   1. Manually from the Actions tab (workflow_dispatch) — best for testing.
+#   2. On a schedule (every 6 hours) — uncomment the `schedule` block.
+#   3. From n8n via an HTTP Request node calling the GitHub API
+#      (repository_dispatch) — best for "download this specific tender now".
+
+on:
+  workflow_dispatch:
+    inputs:
+      tender_url:
+        description: "Full URL of the tender to download"
+        required: true
+        type: string
+
+  repository_dispatch:
+    types: [download-tender]
+
+  # schedule:
+  #   - cron: "0 */6 * * *"   # every 6 hours (UTC)
+
+jobs:
+  download:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Install dependencies
+        working-directory: robot
+        run: npm install
+
+      - name: Install Chromium for Playwright
+        working-directory: robot
+        run: npx playwright install --with-deps chromium
+
+      - name: Run the robot
+        working-directory: robot
+        env:
+          VP_EMAIL: ${{ secrets.VP_EMAIL }}
+          VP_PASSWORD: ${{ secrets.VP_PASSWORD }}
+          VP_LOGIN_URL: ${{ secrets.VP_LOGIN_URL }}
+          N8N_WEBHOOK_URL: ${{ secrets.N8N_WEBHOOK_URL }}
+          # tender_url comes from the manual input OR the n8n dispatch payload
+          TENDER_URL: ${{ github.event.inputs.tender_url || github.event.client_payload.tender_url }}
+        run: npm run download
+
+      - name: Upload downloaded files & failure screenshot
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: vendorpanel-output
+          path: robot/downloads/
+          if-no-files-found: ignore
+          retention-days: 7
