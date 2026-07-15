@@ -94,29 +94,31 @@
   .sheet-tabs .tab{font-size:12.5px;font-weight:600;color:var(--muted);padding:7px 15px;border-radius:8px 8px 0 0}
   .sheet-tabs .tab.on{background:#fff;color:var(--sheet-green);border:1px solid var(--border);border-bottom:2px solid var(--sheet-green)}
 
-  /* ---------- Slack recreation ---------- */
-  .slackwin{max-width:720px;margin:0 auto;background:#fff;border:1px solid var(--border);border-radius:16px;overflow:hidden;box-shadow:var(--shadow-lg)}
-  .slack-head{display:flex;align-items:center;gap:11px;padding:15px 20px;background:var(--slack);color:#fff}
-  .slack-head .hash{font-size:18px;opacity:.7}
-  .slack-head .ch{font-family:var(--display);font-weight:700;font-size:15.5px}
-  .slack-head .mem{margin-left:auto;font-size:12.5px;opacity:.7}
-  .slack-body{padding:10px 20px 18px}
-  .msg{display:flex;gap:12px;padding:14px 0;border-top:1px solid #f0f1f3}
-  .msg:first-child{border-top:none}
-  .msg .av{width:40px;height:40px;border-radius:9px;background:var(--brand);color:#fff;display:grid;place-items:center;font-family:var(--display);font-weight:800;font-size:14px;flex:none}
+  /* ---------- Slack (authentic dark) ---------- */
+  .slackwin{max-width:760px;margin:0 auto;background:#1a1d21;border:1px solid #2b2d31;border-radius:14px;overflow:hidden;box-shadow:var(--shadow-lg);font-family:var(--sans)}
+  .slack-head{display:flex;align-items:center;gap:9px;padding:14px 20px;border-bottom:1px solid #2b2d31}
+  .slack-head .hash{font-size:17px;color:#9a9ca0}
+  .slack-head .ch{font-family:var(--display);font-weight:700;font-size:15px;color:#fff}
+  .slack-head .mem{margin-left:auto;font-size:12.5px;color:#9a9ca0}
+  .slack-body{padding:4px 20px 18px}
+  .slack-div{display:flex;align-items:center;justify-content:center;margin:10px 0 2px;position:relative}
+  .slack-div::before{content:"";position:absolute;left:0;right:0;height:1px;background:#2b2d31}
+  .slack-div span{position:relative;background:#1a1d21;border:1px solid #2b2d31;border-radius:999px;font-size:12px;font-weight:700;color:#d1d2d3;padding:3px 14px}
+  .msg{display:flex;gap:12px;padding:15px 0}
+  .msg .av{width:38px;height:38px;border-radius:9px;background:#ea4b71;display:grid;place-items:center;flex:none}
+  .msg .av svg{width:22px;height:22px;stroke:#fff;fill:none;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
   .msg .m-in{flex:1;min-width:0}
-  .msg .m-top{display:flex;align-items:baseline;gap:8px;margin-bottom:3px}
-  .msg .who{font-weight:700;color:var(--ink);font-size:14.5px}
-  .msg .bot{font-size:10px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;background:#e8eaed;color:#5f6368;padding:1px 6px;border-radius:4px}
-  .msg .tm{font-size:12px;color:var(--muted)}
-  .msg .m-body{font-size:14.5px;color:var(--ink-2);line-height:1.55}
-  .msg .m-body .em{font-style:normal}
-  .msg .m-body strong{color:var(--ink)}
-  .msg .m-body a{color:var(--brand);text-decoration:none}
-  .msg .steps{margin:8px 0 0;padding-left:18px}
-  .msg .steps li{margin:2px 0}
-  .msg .attach{margin-top:9px;border-left:3px solid var(--brand);background:var(--bg-soft);border-radius:0 8px 8px 0;padding:10px 14px;font-size:13.5px;color:var(--ink-2)}
-  .msg .attach b{color:var(--ink)}
+  .msg .m-top{display:flex;align-items:baseline;gap:8px;margin-bottom:5px}
+  .msg .who{font-weight:800;color:#fff;font-size:15px}
+  .msg .bot{font-size:10px;font-weight:700;letter-spacing:.03em;text-transform:uppercase;background:#37383b;color:#cfd0d2;padding:1px 6px;border-radius:4px}
+  .msg .tm{font-size:12px;color:#9a9ca0}
+  .msg .m-body{font-size:14.5px;color:#d1d2d3;line-height:1.5}
+  .msg .m-body .hl{font-weight:800;color:#fff}
+  .msg .m-body .ttl2{display:block;font-weight:800;color:#fff;margin:2px 0 6px;font-size:15px}
+  .msg .m-body .ml{display:block;margin:2px 0}
+  .msg .m-body .sp{display:block;height:9px}
+  .msg .m-body a{color:#5db9f0;text-decoration:none;word-break:break-all}
+  .msg .m-body .auto{color:#9a9ca0;font-style:italic;font-size:13px;display:block;margin-top:8px}
 
   /* ---------- Deep analysis result ---------- */
   .doc{max-width:920px;margin:0 auto;background:#fff;border:1px solid var(--border);border-radius:18px;overflow:hidden;box-shadow:var(--shadow-lg)}
@@ -188,35 +190,30 @@
       </div>
       <div class="sheet-scroll">
         <table class="grid">
-          <thead class="letters"><tr><th>A</th><th>B</th><th>C</th><th>D</th><th>E</th><th>F</th><th>G</th><th>H</th><th>I</th><th>J</th><th>K</th></tr></thead>
+          <thead class="letters"><tr><th>B</th><th>C</th><th>D</th><th>E</th><th>F</th><th>G</th><th>M</th><th>N</th><th>R</th><th>U</th><th>V</th></tr></thead>
           <thead class="head"><tr>
-            <th>Tier</th><th>Service</th><th>SecurityType</th><th>Title</th><th>Location</th><th>Deadline</th><th>Days</th><th>RedFlags</th><th>BuyerOrg</th><th>Source</th><th>HumanApproval</th>
+            <th>Tier</th><th>Service</th><th>SecurityType</th><th>Title</th><th>Location</th><th>Region</th><th>Deadline</th><th>Days</th><th>Source</th><th>HumanApproval</th><th>DocumentLink</th>
           </tr></thead>
           <tbody>
             <tr>
+              <td><span class="tg c">C</span></td><td>Cleaning</td><td>N/A</td>
+              <td class="title">Provision of Cleaning Chemicals and Dispensing Systems</td>
+              <td>Queensland</td><td>QLD-statewide</td><td>27/Jul/2026 2:00</td><td><span class="dd">27</span></td><td>VendorPanel</td><td><span class="ap pending">Pending</span></td><td></td>
+            </tr>
+            <tr>
               <td><span class="tg a">A</span></td><td>Security</td><td>Electronic/CCTV</td>
-              <td class="title">Maintenance of Access Control, CCTV, Duress &amp; Nurse Call Systems</td>
-              <td>Statewide QLD</td><td>16 Jul, 2:00 PM</td><td><span class="dd hot">2</span></td><td>None found</td><td>Metro South Health</td><td>VendorPanel</td><td><span class="ap analyzed">Analyzed</span></td>
+              <td class="title">Access Control Security, CCTV, Duress &amp; Nurse Call Systems</td>
+              <td>Queensland</td><td>QLD-statewide</td><td>16/Jul/2026 2:00</td><td><span class="dd hot">16</span></td><td>VendorPanel</td><td><span class="ap pending">Pending</span></td><td></td>
+            </tr>
+            <tr>
+              <td><span class="tg a">A</span></td><td>Security</td><td>Manpower/Guarding</td>
+              <td class="title">ITO — Security Service (Standing Offer Arrangement)</td>
+              <td>Queensland</td><td>QLD-statewide</td><td>14/Jul/2026 2:00</td><td><span class="dd hot">14</span></td><td>VendorPanel</td><td><span class="ap analyzed">Analyzed</span></td><td><a href="#" style="color:var(--brand)">drive.google.com/…</a></td>
             </tr>
             <tr>
               <td><span class="tg a">A</span></td><td>Cleaning</td><td>N/A</td>
-              <td class="title">Graffiti Removal Services — Bayside LGA (up to 5 years)</td>
-              <td>Bayside, SEQ</td><td>15 Jul, 10:00 AM</td><td><span class="dd hot">1</span></td><td>None found</td><td>Bayside Council</td><td>VendorPanel</td><td><span class="ap approved">Approved</span></td>
-            </tr>
-            <tr>
-              <td><span class="tg b">B</span></td><td>Cleaning</td><td>N/A</td>
-              <td class="title">Cleaning Services — Council Sites (150+ locations)</td>
-              <td>Statewide QLD</td><td>27 Jul, 2:00 PM</td><td><span class="dd">13</span></td><td>None found</td><td>Brisbane City Council</td><td>Brisbane CC</td><td><span class="ap pending">Pending</span></td>
-            </tr>
-            <tr>
-              <td><span class="tg a">A</span></td><td>Cleaning</td><td>N/A</td>
-              <td class="title">Commercial Cleaning — Council facilities &amp; depots</td>
-              <td>Logan, SEQ</td><td>04 Aug, 2:00 PM</td><td><span class="dd">21</span></td><td>Prequalification</td><td>Logan City Council</td><td>VendorPanel</td><td><span class="ap pending">Pending</span></td>
-            </tr>
-            <tr>
-              <td><span class="tg b">B</span></td><td>Security</td><td>Manpower/Guarding</td>
-              <td class="title">Static Guarding &amp; Patrols — Depot, Yatala</td>
-              <td>Yatala, SEQ</td><td>08 Aug, 12:00 PM</td><td><span class="dd">25</span></td><td>Licence req.</td><td>City of Gold Coast</td><td>VendorPanel</td><td><span class="ap pending">Pending</span></td>
+              <td class="title">Cleaning Services Council Sites — Council currently has 150+ sites</td>
+              <td>Brisbane</td><td>SEQ</td><td>June 2026</td><td><span class="dd">0</span></td><td>Brisbane City Council</td><td><span class="ap approved">Approved</span></td><td><a href="#" style="color:var(--brand)">drive.google.com/…</a></td>
             </tr>
           </tbody>
         </table>
@@ -235,37 +232,49 @@
     <div class="sec-top reveal">
       <span class="kicker">2 · The Slack alerts</span>
       <h2>Your team is pinged the moment something needs them.</h2>
-      <p>No watching a spreadsheet. Three clear notifications land in your channel — new leads, documents needed, and completed analysis.</p>
+      <p>No watching a spreadsheet. Signal posts to Slack when a tender lands, when a document is needed, and when analysis is ready. Below are two real new-tender alerts from <span style="white-space:nowrap">n8n_bot</span>.</p>
     </div>
     <div class="slackwin reveal d1">
-      <div class="slack-head"><span class="hash">#</span><span class="ch">hermes-testing</span><span class="mem">3 members</span></div>
+      <div class="slack-head"><span class="hash">#</span><span class="ch">tender-alerts</span><span class="mem">3 members</span></div>
       <div class="slack-body">
+        <div class="slack-div"><span>Today</span></div>
         <div class="msg">
-          <span class="av">S</span>
+          <span class="av"><svg viewBox="0 0 24 24"><rect x="4" y="8" width="16" height="12" rx="3"/><path d="M12 4v4M8.5 13h.01M15.5 13h.01M9 17h6"/></svg></span>
           <div class="m-in">
-            <div class="m-top"><span class="who">Signal</span><span class="bot">App</span><span class="tm">9:04 AM</span></div>
-            <div class="m-body"><span class="em">🚨</span> <strong>New Tier A tender — in zone</strong><br>Security · Electronic/CCTV — <strong>Maintenance of Access Control, CCTV &amp; Nurse Call Systems</strong>. Closes in <strong>2 days</strong> (16 Jul, 2:00 PM). Review on the board →</div>
+            <div class="m-top"><span class="who">n8n_bot</span><span class="bot">App</span><span class="tm">12:27 PM</span></div>
+            <div class="m-body">
+              📣 <span class="hl">New tender — Tier B (Security)</span>
+              <span class="ttl2">Electorate Office Security System and EACS Upgrade Project (QLD wide)</span>
+              <span class="ml">📍 Statewide QLD  |  QLD-statewide</span>
+              <span class="ml">⏰ Closes: 28/Aug/2026 10:00 AM  (44 days)</span>
+              <span class="ml">🏢 Queensland Parliament: Parliamentary Service</span>
+              <span class="ml">📞</span>
+              <span class="sp"></span>
+              Queensland-wide supply and installation of electronic security and access control systems for electorate office security upgrade.
+              <span class="sp"></span>
+              Approve in the sheet, then paste the DocumentLink.
+              <span class="ml"><a href="#">https://www.vendorpanel.com.au/tsi.axd?id=b56cc99575bc4b399b6f9ca53ac6d2c3s516952sac80c4bf18ad42cca3c5c7ad41e6ef8bs1601</a></span>
+              <span class="auto">Automated with this n8n workflow</span>
+            </div>
           </div>
         </div>
         <div class="msg">
-          <span class="av">S</span>
+          <span class="av"><svg viewBox="0 0 24 24"><rect x="4" y="8" width="16" height="12" rx="3"/><path d="M12 4v4M8.5 13h.01M15.5 13h.01M9 17h6"/></svg></span>
           <div class="m-in">
-            <div class="m-top"><span class="who">Signal</span><span class="bot">App</span><span class="tm">9:12 AM</span></div>
-            <div class="m-body"><span class="em">📥</span> <strong>Approved — VendorPanel pack needed</strong><br><strong>Graffiti Removal Services — Bayside LGA</strong>
-              <ol class="steps">
-                <li>Open the portal listing</li>
-                <li>Register interest &amp; download the pack</li>
-                <li>Upload to Drive, paste the link into <strong>DocumentLink</strong></li>
-              </ol>
-              Closes in <strong>1 day</strong>. <a href="#">Portal link →</a></div>
-          </div>
-        </div>
-        <div class="msg">
-          <span class="av">S</span>
-          <div class="m-in">
-            <div class="m-top"><span class="who">Signal</span><span class="bot">App</span><span class="tm">9:38 AM</span></div>
-            <div class="m-body"><span class="em">✅</span> <strong>Deep analysis complete: Access Control &amp; CCTV Maintenance</strong><br>Compliance, pricing structure, scope and bid strategy are in the <strong>Deep Analysis</strong> tab. Ready for final review.
-              <div class="attach"><b>Recommended:</b> Lead with local SEQ response times and licensed technicians. Incumbent likely — differentiate on 15-min emergency call-out.</div>
+            <div class="m-top"><span class="who">n8n_bot</span><span class="bot">App</span><span class="tm">12:27 PM</span></div>
+            <div class="m-body">
+              📣 <span class="hl">New tender — Tier B (Cleaning)</span>
+              <span class="ttl2">Provision of Cleaning Chemicals and Dispensing Systems</span>
+              <span class="ml">📍 Queensland  |  QLD-statewide</span>
+              <span class="ml">⏰ Closes: 27/Jul/2026 02:00 PM (UTC+10:00)  (12 days)</span>
+              <span class="ml">🏢 Queensland Health</span>
+              <span class="ml">📞</span>
+              <span class="sp"></span>
+              Supply of cleaning chemicals and dispensing systems for clinical and non-clinical facilities.
+              <span class="sp"></span>
+              Approve in the sheet, then paste the DocumentLink.
+              <span class="ml"><a href="#">https://www.vendorpanel.com.au/tsi.axd?id=1fa8699f166149bc9618567cca93a972s514836s1be3b358b92a46719b11b51c8e9ad2c7s1551</a></span>
+              <span class="auto">Automated with this n8n workflow</span>
             </div>
           </div>
         </div>
@@ -285,39 +294,43 @@
       <div class="doc-head">
         <div class="row">
           <span class="tg a">A</span>
-          <h3>Maintenance of Access Control, CCTV, Duress &amp; Nurse Call Systems</h3>
+          <h3>ITO — Security Service · Standing Offer Arrangement (SOA)</h3>
         </div>
         <div class="meta">
-          <span class="chip">Security · Electronic/CCTV</span>
+          <span class="chip">Security · Manpower/Guarding</span>
           <span class="chip">Statewide QLD</span>
-          <span class="chip">Closes 16 Jul, 2:00 PM</span>
-          <span class="chip">Ongoing · 3 yr + 2×1 yr</span>
+          <span class="chip">Closes 14 Jul, 2:00 PM</span>
+          <span class="chip">SOA · 7 yr + 3×1 yr</span>
         </div>
       </div>
       <div class="doc-body">
         <div class="field">
           <div class="fl"><span class="fi"><svg class="icn" viewBox="0 0 24 24"><path d="M9 12l2 2 4-4"/><path d="M12 3l7 4v5a9 9 0 0 1-7 8 9 9 0 0 1-7-8V7z"/></svg></span> Compliance requirements</div>
-          <p>Current QLD Security Firm &amp; individual Security licences; ASIAL membership preferred; Cabling Provider Rules registration for electronic works; Public Liability $20M; Professional Indemnity $5M; Workcover QLD; National Police Certificate for all field staff.</p>
+          <p>Company must hold a Security Provider Licence under the Security Providers Act 1993 (Qld), and any applicable Labour Hire Licence. Suppliers must be members of an approved industry association (e.g. BSCAA, SPAAL, ASIAL). Security Officers must hold a valid Queensland Security Licence and, where applicable, a Blue Card. Public and product liability insurance to a minimum value of $20 million per occurrence. Workers compensation insurance as required by law. Adherence to the Queensland Government Supplier Code of Conduct and Information Privacy Act 2009 (Qld), Fair Work Act 2009 (Cth) and relevant WHS and anti-discrimination legislation.</p>
         </div>
         <div class="field">
           <div class="fl"><span class="fi"><svg class="icn" viewBox="0 0 24 24"><path d="M12 2v20M6 6h9a3 3 0 0 1 0 6H8a3 3 0 0 0 0 6h10"/></svg></span> Pricing structure</div>
-          <p>Schedule of rates: fixed monthly preventative-maintenance fee per site band, hourly corrective-maintenance rates (business / after-hours), call-out fee, and a parts margin cap. GST exclusive. Annual CPI escalation from year 2.</p>
+          <p>Pricing is to be provided in Australian Dollars, inclusive of GST. The Price for Security Services comprises the applicable Security Services Industry Award (SSIA) base hourly rate — including mandatory penalty rates, overtime and loadings — plus a fixed administration fee. The administration fee is fixed for the Term and must not vary by reference to penalty rates, overtime, shift loadings or public holidays. Annual SSIA adjustments from the Fair Work Commission Annual Wage Review apply to the base rate only. Fuel, mileage and vehicle costs are deemed included unless stated otherwise. Invoices submitted monthly within ten (10) Business Days of the end of the billing period.</p>
         </div>
         <div class="field">
           <div class="fl"><span class="fi"><svg class="icn" viewBox="0 0 24 24"><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/></svg></span> Scope of work</div>
-          <p>Preventative and corrective maintenance of access-control, CCTV, duress and nurse-call systems across multiple health facilities. Includes scheduled inspections, fault rectification, 24/7 emergency call-out, spare-parts management and compliance reporting. Sites operate around the clock — response windows apply.</p>
+          <p>The Standing Offer Arrangement (SOA) is for the provision of static guarding, mobile patrols, alarm response, foot patrols, guard-with-canine patrols and other security services to Queensland Government facilities and assets state-wide. Services can be scheduled or ad-hoc, on a per-minute, hourly, weekly or 24/7 basis including public holidays. The primary objective is to secure government facilities and assets, ensuring safe and effective operational environments. Deliverables include appropriately licensed and trained security officers, detailed incident reporting, and adherence to strict performance metrics and governance requirements.</p>
         </div>
         <div class="field">
           <div class="fl"><span class="fi"><svg class="icn" viewBox="0 0 24 24"><path d="M12 2a10 10 0 1 0 10 10"/><path d="M12 6v6l4 2"/></svg></span> KPIs &amp; SLAs</div>
-          <p>Priority-1 emergency response ≤ 15 minutes phone / ≤ 2 hours on-site; Priority-2 ≤ 24 hours; 98% preventative-maintenance schedule adherence; monthly performance reporting; escalation matrix for critical outages.</p>
+          <p>KPIs include: Site Attendance (100% attendance for all scheduled shifts, 0 unattended sites or unapproved early departures); Invoicing (100% submitted within 10 Business Days, correct on first submission); Major Incident Reporting (verbal within 1 hour, written within 24 hours); Standard Incident Reporting (within 24 hours); Security &amp; Compliance (deviations reported within 1 hour). Failure to meet KPIs results in warnings, service credits and potential termination for repeated breaches. Reporting includes daily attendance, monthly operational and ad-hoc reports on request.</p>
         </div>
         <div class="field">
           <div class="fl"><span class="fi"><svg class="icn" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6M9 13h6M9 17h6"/></svg></span> Submission &amp; evaluation</div>
-          <p>Online lodgement via portal; capability statement (≤ 10 pages), 3 referees, licence evidence, WHS system. Evaluated on price (30%), capability &amp; experience (30%), local response (20%), WHS &amp; compliance (20%).</p>
+          <p><strong>Submission:</strong> Offers lodged electronically via the VendorPanel website by 2:00 PM AEST, Tuesday 14 July 2026, in Microsoft Word and Adobe PDF formats. Part C: ITO Response Schedules (Schedule A, Response Book 1 – Requirements, Response Book 2 – Pricing, Schedule B for alternatives) plus Supplier Acknowledgements and Certifications must be completed. <strong>Evaluation:</strong> Mandatory criteria (pass/fail) — Supplier Code of Conduct, Security Firm Licence, Labour Hire Licence, approved industry-association membership. Desirable — Capability, Capacity, Process, Personnel Management, and Cost/value for money.</p>
+        </div>
+        <div class="field">
+          <div class="fl"><span class="fi"><svg class="icn" viewBox="0 0 24 24"><path d="M10.3 21a1.9 1.9 0 0 0 3.4 0M4 8a8 8 0 0 1 16 0c0 7 3 9 3 9H1s3-2 3-9"/></svg></span> Red flags</div>
+          <p>The SOA is mandatory for the Principal's procurement of Security Services. The Principal reserves the right to manage the panel, including progressively rolling Suppliers off, and no reliance can be placed on stated volumes. Term is seven (7) years with three (3)×one (1) year extensions. Cap on liability of the greater of $20 million per annum or as limited by law. Subcontractors require the Principal's prior written approval. Personnel must complete a Confidentiality, Privacy and Conflict of Interest Deed.</p>
         </div>
         <div class="field strat">
           <div class="fl"><span class="fi"><svg class="icn" viewBox="0 0 24 24"><path d="M13 2L3 14h7l-1 8 10-12h-7z"/></svg></span> Recommended bid strategy</div>
-          <p>An incumbent likely holds this contract — differentiate on <strong>local SEQ presence and guaranteed response times</strong>, not price alone. Emphasise licensed in-house technicians, a 15-minute emergency call-out commitment, and health-sector experience. Address the 24/7 nature directly with a named after-hours escalation team. Keep pricing competitive on the monthly PM fee where evaluation weight sits.</p>
+          <p>Focus on demonstrating robust compliance with all mandatory requirements — particularly licensing, insurance and adherence to the Queensland Government Supplier Code of Conduct. Clearly articulate capability and capacity to deliver across diverse Queensland locations. Provide a competitive, transparent pricing structure that adheres to the SSIA base-rate and fixed-administration-fee model, emphasising value for money. Highlight innovative approaches and differentiators that align with the Queensland Procurement Policy's social and environmental objectives.</p>
         </div>
       </div>
     </div>
@@ -336,7 +349,7 @@
 <footer>
   <div class="wrap foot-in">
     <span>Prepared by <b>CJ Studio</b> · Signal Tender Intelligence</span>
-    <span>Output shown is representative of live runs; buyer names generalised for this proposal.</span>
+    <span>Content is verbatim output captured from live production runs (Jun–Jul 2026).</span>
   </div>
 </footer>
 
