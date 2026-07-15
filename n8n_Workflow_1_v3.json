@@ -1,0 +1,1703 @@
+{
+  "name": "Tender Discovery & Triage (v3)",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "hours"
+            }
+          ]
+        }
+      },
+      "id": "1662e265-08df-4e1e-bac2-802361eb7b5a",
+      "name": "Schedule Trigger",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1,
+      "position": [
+        2320,
+        1440
+      ]
+    },
+    {
+      "parameters": {
+        "url": "https://www.tenders.gov.au/public_data/rss/rss.xml",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "User-Agent",
+              "value": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "18a1b517-f66e-461e-b1cc-146d7be21531",
+      "name": "Fetch AusTender RSS",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [
+        2540,
+        1120
+      ]
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "id": "8f6262a2-932c-4ca3-8caa-cf15e32e4fbb",
+      "name": "Convert XML to JSON",
+      "type": "n8n-nodes-base.xml",
+      "typeVersion": 1,
+      "position": [
+        2740,
+        1120
+      ]
+    },
+    {
+      "parameters": {
+        "fieldToSplitOut": "rss.channel.item",
+        "options": {}
+      },
+      "id": "7c4cd292-740c-4934-9bed-74835dd0666c",
+      "name": "Split Tender Items",
+      "type": "n8n-nodes-base.itemLists",
+      "typeVersion": 3,
+      "position": [
+        2940,
+        1120
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "return $input.all().map(it => {\n  const j = it.json;\n  const g = j.guid;\n  const guid = (g && typeof g === 'object') ? (g['#text'] || g._ || j.link) : (g || j.link);\n  return { json: {\n    title: j.title || '',\n    link: j.link || '',\n    guid: guid,\n    posted_raw: j.pubDate || '',\n    description: j.description || '',\n    source: 'AusTender',\n    search_blob: ((j.title || '') + ' ' + (j.description || '')).toLowerCase()\n  }};\n});"
+      },
+      "id": "1c598249-9130-4852-abfd-f69bbe8ba9bc",
+      "name": "Normalize (AusTender)",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3140,
+        1120
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 1
+          },
+          "conditions": [
+            {
+              "id": "k1",
+              "leftValue": "={{ $json.search_blob }}",
+              "rightValue": "security",
+              "operator": {
+                "type": "string",
+                "operation": "contains"
+              }
+            },
+            {
+              "id": "k2",
+              "leftValue": "={{ $json.search_blob }}",
+              "rightValue": "cleaning",
+              "operator": {
+                "type": "string",
+                "operation": "contains"
+              }
+            },
+            {
+              "id": "k3",
+              "leftValue": "={{ $json.search_blob }}",
+              "rightValue": "guard",
+              "operator": {
+                "type": "string",
+                "operation": "contains"
+              }
+            },
+            {
+              "id": "k4",
+              "leftValue": "={{ $json.search_blob }}",
+              "rightValue": "patrol",
+              "operator": {
+                "type": "string",
+                "operation": "contains"
+              }
+            },
+            {
+              "id": "k5",
+              "leftValue": "={{ $json.search_blob }}",
+              "rightValue": "janitor",
+              "operator": {
+                "type": "string",
+                "operation": "contains"
+              }
+            },
+            {
+              "id": "k6",
+              "leftValue": "={{ $json.search_blob }}",
+              "rightValue": "facilit",
+              "operator": {
+                "type": "string",
+                "operation": "contains"
+              }
+            }
+          ],
+          "combinator": "or"
+        },
+        "options": {}
+      },
+      "id": "8faf7fe3-a263-4001-8ff4-94e9d684dddf",
+      "name": "Keyword (AusTender)",
+      "type": "n8n-nodes-base.filter",
+      "typeVersion": 2,
+      "position": [
+        3340,
+        1120
+      ]
+    },
+    {
+      "parameters": {
+        "url": "={{ $json.link }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "User-Agent",
+              "value": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "d7dd8ab7-4d9e-4bd5-b5f2-2c6d24022299",
+      "name": "Download Webpage",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [
+        3540,
+        1120
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "extractHtmlContent",
+        "extractionValues": {
+          "values": [
+            {
+              "key": "text",
+              "cssSelector": "body"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "38eca95a-e842-4cac-be56-bffad5d8f1bd",
+      "name": "Extract HTML Text",
+      "type": "n8n-nodes-base.html",
+      "typeVersion": 1,
+      "position": [
+        3740,
+        1120
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "const meta = $('Normalize (AusTender)').item.json;\nreturn { json: {\n  title: meta.title,\n  link: meta.link,\n  guid: meta.guid,\n  source: meta.source,\n  posted_raw: meta.posted_raw,\n  text: ($json.text || '').toString().slice(0, 4000)\n} };"
+      },
+      "id": "dcafe820-9e3e-4cd3-ab40-df18b9425803",
+      "name": "Build Item (AusTender)",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3940,
+        1120
+      ]
+    },
+    {
+      "parameters": {
+        "url": "https://www.vendorpanel.com.au/PublicTendersRssV2.aspx?mode=all",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "User-Agent",
+              "value": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "ef348416-1bca-49e0-abb7-6e7201662193",
+      "name": "Fetch VendorPanel RSS",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [
+        2540,
+        1440
+      ]
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "id": "2a2de51a-9901-4534-9208-064d0095f7b5",
+      "name": "Convert XML to JSON (VP)",
+      "type": "n8n-nodes-base.xml",
+      "typeVersion": 1,
+      "position": [
+        2740,
+        1440
+      ]
+    },
+    {
+      "parameters": {
+        "fieldToSplitOut": "rss.channel.item",
+        "options": {}
+      },
+      "id": "4beaf671-d676-4d76-b31f-2ea2f082616e",
+      "name": "Split Tender Items (VP)",
+      "type": "n8n-nodes-base.itemLists",
+      "typeVersion": 3,
+      "position": [
+        2940,
+        1440
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "return $input.all().map(it => {\n  const j = it.json;\n  const rawDesc = (typeof j.description === 'string' ? j.description : JSON.stringify(j.description || '')).toString();\n  const cleanDesc = rawDesc\n    .replace(/<[^>]+>/g, ' ')\n    .replace(/&nbsp;/gi, ' ')\n    .replace(/&amp;/gi, '&')\n    .replace(/\\s+/g, ' ')\n    .trim();\n  const title = (j.title || '').toString();\n  const g = j.guid;\n  const guid = (g && typeof g === 'object') ? (g['#text'] || g._ || j.link) : (g || j.link);\n  return { json: {\n    title: title,\n    link: j.link || '',\n    guid: guid,\n    posted_raw: j.pubDate || '',\n    source: 'VendorPanel',\n    text: (title + ' \\u2014 ' + cleanDesc),\n    search_blob: (title + ' ' + cleanDesc).toLowerCase()\n  }};\n});"
+      },
+      "id": "662bb98e-81d3-4035-9cfa-3e5fc30277ad",
+      "name": "Normalize (VendorPanel)",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3140,
+        1440
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 1
+          },
+          "conditions": [
+            {
+              "id": "v1",
+              "leftValue": "={{ $json.search_blob }}",
+              "rightValue": "security",
+              "operator": {
+                "type": "string",
+                "operation": "contains"
+              }
+            },
+            {
+              "id": "v2",
+              "leftValue": "={{ $json.search_blob }}",
+              "rightValue": "cleaning",
+              "operator": {
+                "type": "string",
+                "operation": "contains"
+              }
+            },
+            {
+              "id": "v3",
+              "leftValue": "={{ $json.search_blob }}",
+              "rightValue": "guard",
+              "operator": {
+                "type": "string",
+                "operation": "contains"
+              }
+            },
+            {
+              "id": "v4",
+              "leftValue": "={{ $json.search_blob }}",
+              "rightValue": "patrol",
+              "operator": {
+                "type": "string",
+                "operation": "contains"
+              }
+            },
+            {
+              "id": "v5",
+              "leftValue": "={{ $json.search_blob }}",
+              "rightValue": "janitor",
+              "operator": {
+                "type": "string",
+                "operation": "contains"
+              }
+            },
+            {
+              "id": "v6",
+              "leftValue": "={{ $json.search_blob }}",
+              "rightValue": "facilit",
+              "operator": {
+                "type": "string",
+                "operation": "contains"
+              }
+            },
+            {
+              "id": "v7",
+              "leftValue": "={{ $json.search_blob }}",
+              "rightValue": "concierge",
+              "operator": {
+                "type": "string",
+                "operation": "contains"
+              }
+            },
+            {
+              "id": "v8",
+              "leftValue": "={{ $json.search_blob }}",
+              "rightValue": "cctv",
+              "operator": {
+                "type": "string",
+                "operation": "contains"
+              }
+            }
+          ],
+          "combinator": "or"
+        },
+        "options": {}
+      },
+      "id": "afd8caae-0b52-4525-ab7c-b3e676624c28",
+      "name": "Keyword (VendorPanel)",
+      "type": "n8n-nodes-base.filter",
+      "typeVersion": 2,
+      "position": [
+        3340,
+        1440
+      ]
+    },
+    {
+      "parameters": {
+        "url": "https://www.brisbane.qld.gov.au/business/council-tenders-and-market-led-proposals/current-tenders",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "User-Agent",
+              "value": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "7dadc386-2d24-46ff-88f9-44f24182dbaf",
+      "name": "Fetch Brisbane CC",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [
+        2540,
+        1760
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "extractHtmlContent",
+        "extractionValues": {
+          "values": [
+            {
+              "key": "rows",
+              "cssSelector": "table tr",
+              "returnValue": "html",
+              "returnArray": true
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "0ce867b4-95cd-4397-8ff1-6ad1360cf687",
+      "name": "Extract BCC Rows",
+      "type": "n8n-nodes-base.html",
+      "typeVersion": 1,
+      "position": [
+        2740,
+        1760
+      ]
+    },
+    {
+      "parameters": {
+        "fieldToSplitOut": "rows",
+        "options": {}
+      },
+      "id": "d3dd7508-7e82-4117-bce7-1cda29f0df76",
+      "name": "Split BCC Rows",
+      "type": "n8n-nodes-base.itemLists",
+      "typeVersion": 3,
+      "position": [
+        2940,
+        1760
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const BASE = 'https://www.brisbane.qld.gov.au';\nconst LANDING = BASE + '/business/council-tenders-and-market-led-proposals/current-tenders';\nreturn $input.all().map(it => {\n  const html = (it.json.rows || '').toString();\n  // first anchor in the row = the tender's own link + name\n  const a = html.match(/<a[^>]*href=[\"']([^\"']+)[\"'][^>]*>([\\s\\S]*?)<\\/a>/i);\n  let link = LANDING, title = '';\n  if (a) {\n    link = /^https?:/i.test(a[1]) ? a[1] : BASE + (a[1].startsWith('/') ? '' : '/') + a[1];\n    title = a[2].replace(/<[^>]+>/g, ' ').replace(/&nbsp;/gi, ' ').replace(/&amp;/gi, '&').replace(/\\s+/g, ' ').trim();\n  }\n  const rowText = html.replace(/<[^>]+>/g, ' ').replace(/&nbsp;/gi, ' ').replace(/&amp;/gi, '&').replace(/\\s+/g, ' ').trim();\n  if (!title) title = rowText.slice(0, 140);\n  return { json: {\n    title: title,\n    link: link,\n    guid: 'BCC:' + (a ? link : rowText.slice(0, 90)),\n    posted_raw: '',\n    source: 'Brisbane City Council',\n    text: rowText,\n    search_blob: rowText.toLowerCase()\n  }};\n}).filter(x =>\n  x.json.text.length > 15 &&\n  !/^(tender|title|description|closing|status|reference|number)\\b/i.test(x.json.title.trim())\n);"
+      },
+      "id": "b521c687-899b-4198-a37b-424a17bffe14",
+      "name": "Normalize (BCC)",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3140,
+        1760
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 1
+          },
+          "conditions": [
+            {
+              "id": "b1",
+              "leftValue": "={{ $json.search_blob }}",
+              "rightValue": "security",
+              "operator": {
+                "type": "string",
+                "operation": "contains"
+              }
+            },
+            {
+              "id": "b2",
+              "leftValue": "={{ $json.search_blob }}",
+              "rightValue": "cleaning",
+              "operator": {
+                "type": "string",
+                "operation": "contains"
+              }
+            },
+            {
+              "id": "b3",
+              "leftValue": "={{ $json.search_blob }}",
+              "rightValue": "guard",
+              "operator": {
+                "type": "string",
+                "operation": "contains"
+              }
+            },
+            {
+              "id": "b4",
+              "leftValue": "={{ $json.search_blob }}",
+              "rightValue": "patrol",
+              "operator": {
+                "type": "string",
+                "operation": "contains"
+              }
+            },
+            {
+              "id": "b5",
+              "leftValue": "={{ $json.search_blob }}",
+              "rightValue": "janitor",
+              "operator": {
+                "type": "string",
+                "operation": "contains"
+              }
+            },
+            {
+              "id": "b6",
+              "leftValue": "={{ $json.search_blob }}",
+              "rightValue": "facilit",
+              "operator": {
+                "type": "string",
+                "operation": "contains"
+              }
+            },
+            {
+              "id": "b7",
+              "leftValue": "={{ $json.search_blob }}",
+              "rightValue": "concierge",
+              "operator": {
+                "type": "string",
+                "operation": "contains"
+              }
+            },
+            {
+              "id": "b8",
+              "leftValue": "={{ $json.search_blob }}",
+              "rightValue": "cctv",
+              "operator": {
+                "type": "string",
+                "operation": "contains"
+              }
+            }
+          ],
+          "combinator": "or"
+        },
+        "options": {}
+      },
+      "id": "42a4d463-197f-41b2-90e3-e00f42f13e61",
+      "name": "Keyword (BCC)",
+      "type": "n8n-nodes-base.filter",
+      "typeVersion": 2,
+      "position": [
+        3340,
+        1760
+      ]
+    },
+    {
+      "parameters": {
+        "url": "https://REPLACE-WITH-A-REAL-RSS-FEED.example/rss.xml",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "User-Agent",
+              "value": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "cc40dd50-0001-4a10-9a10-fetchextrarss",
+      "name": "Fetch Extra RSS",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [
+        2540,
+        2080
+      ],
+      "disabled": true
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "id": "cc40dd50-0002-4a10-9a10-convertextra",
+      "name": "Convert XML (Extra)",
+      "type": "n8n-nodes-base.xml",
+      "typeVersion": 1,
+      "position": [
+        2740,
+        2080
+      ]
+    },
+    {
+      "parameters": {
+        "fieldToSplitOut": "rss.channel.item",
+        "options": {}
+      },
+      "id": "cc40dd50-0003-4a10-9a10-splitextra",
+      "name": "Split (Extra)",
+      "type": "n8n-nodes-base.itemLists",
+      "typeVersion": 3,
+      "position": [
+        2940,
+        2080
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "return $input.all().map(it => {\n  const j = it.json;\n  const rawDesc = (typeof j.description === 'string' ? j.description : JSON.stringify(j.description || '')).toString();\n  const cleanDesc = rawDesc.replace(/<[^>]+>/g, ' ').replace(/&nbsp;/gi, ' ').replace(/&amp;/gi, '&').replace(/\\s+/g, ' ').trim();\n  const title = (j.title || '').toString();\n  const g = j.guid;\n  const guid = (g && typeof g === 'object') ? (g['#text'] || g._ || j.link) : (g || j.link);\n  return { json: {\n    title: title,\n    link: j.link || '',\n    guid: guid,\n    posted_raw: j.pubDate || '',\n    source: 'Extra RSS',\n    text: (title + ' \\u2014 ' + cleanDesc),\n    search_blob: (title + ' ' + cleanDesc).toLowerCase()\n  }};\n});"
+      },
+      "id": "cc40dd50-0004-4a10-9a10-normalizeextra",
+      "name": "Normalize (Extra)",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3140,
+        2080
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 1
+          },
+          "conditions": [
+            {
+              "id": "e1",
+              "leftValue": "={{ $json.search_blob }}",
+              "rightValue": "security",
+              "operator": {
+                "type": "string",
+                "operation": "contains"
+              }
+            },
+            {
+              "id": "e2",
+              "leftValue": "={{ $json.search_blob }}",
+              "rightValue": "cleaning",
+              "operator": {
+                "type": "string",
+                "operation": "contains"
+              }
+            },
+            {
+              "id": "e3",
+              "leftValue": "={{ $json.search_blob }}",
+              "rightValue": "guard",
+              "operator": {
+                "type": "string",
+                "operation": "contains"
+              }
+            },
+            {
+              "id": "e4",
+              "leftValue": "={{ $json.search_blob }}",
+              "rightValue": "patrol",
+              "operator": {
+                "type": "string",
+                "operation": "contains"
+              }
+            },
+            {
+              "id": "e5",
+              "leftValue": "={{ $json.search_blob }}",
+              "rightValue": "janitor",
+              "operator": {
+                "type": "string",
+                "operation": "contains"
+              }
+            },
+            {
+              "id": "e6",
+              "leftValue": "={{ $json.search_blob }}",
+              "rightValue": "facilit",
+              "operator": {
+                "type": "string",
+                "operation": "contains"
+              }
+            },
+            {
+              "id": "e7",
+              "leftValue": "={{ $json.search_blob }}",
+              "rightValue": "concierge",
+              "operator": {
+                "type": "string",
+                "operation": "contains"
+              }
+            },
+            {
+              "id": "e8",
+              "leftValue": "={{ $json.search_blob }}",
+              "rightValue": "cctv",
+              "operator": {
+                "type": "string",
+                "operation": "contains"
+              }
+            }
+          ],
+          "combinator": "or"
+        },
+        "options": {}
+      },
+      "id": "cc40dd50-0005-4a10-9a10-keywordextra",
+      "name": "Keyword (Extra)",
+      "type": "n8n-nodes-base.filter",
+      "typeVersion": 2,
+      "position": [
+        3340,
+        2080
+      ]
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "1YrekkkB-YjNAhWA1A-VYMxCcEl8A-UB5d627_zx7fEY",
+          "mode": "list",
+          "cachedResultName": "Tender sheets "
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Watchlist",
+          "mode": "list",
+          "cachedResultName": "Watchlist"
+        },
+        "options": {}
+      },
+      "id": "dd50ee60-0001-4a10-9a10-readwatchlist",
+      "name": "Read Watchlist",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.2,
+      "position": [
+        2540,
+        2400
+      ],
+      "disabled": true,
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "HLZxRgOR9Y2XBrnV",
+          "name": "Sheets permission(14/07/2026)"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const KW = ['security','cleaning','guard','patrol','janitor','facilit','concierge','cctv'];\nconst out = [];\nfor (const row of $input.all()) {\n  const site = (row.json.SiteName || 'Watchlist').toString();\n  const url = (row.json.URL || '').toString().trim();\n  if (!url) continue;\n  let html = '';\n  try {\n    const res = await this.helpers.httpRequest({ url, headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' }, timeout: 20000 });\n    html = (typeof res === 'string') ? res : JSON.stringify(res);\n  } catch (e) { continue; }\n  const originMatch = url.match(/^https?:\\/\\/[^/]+/);\n  const origin = originMatch ? originMatch[0] : '';\n  const re = /<a[^>]*href=[\"']([^\"'#]+)[\"'][^>]*>([\\s\\S]*?)<\\/a>/gi;\n  let m; const seen = new Set();\n  while ((m = re.exec(html)) !== null) {\n    let link = m[1];\n    const title = m[2].replace(/<[^>]+>/g, ' ').replace(/&nbsp;/gi, ' ').replace(/&amp;/gi, '&').replace(/\\s+/g, ' ').trim();\n    if (title.length < 15) continue;\n    const blob = title.toLowerCase();\n    if (!KW.some(k => blob.includes(k))) continue;\n    if (link.startsWith('/')) link = origin + link;\n    if (!/^https?:/i.test(link)) continue;\n    if (seen.has(link)) continue; seen.add(link);\n    out.push({ json: {\n      title: title,\n      link: link,\n      guid: 'WL:' + link,\n      posted_raw: '',\n      source: site,\n      text: title,\n      search_blob: blob\n    }});\n  }\n}\nreturn out;"
+      },
+      "id": "dd50ee60-0002-4a10-9a10-scrapewatchlist",
+      "name": "Scrape Watchlist",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2820,
+        2400
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const store = $getWorkflowStaticData('global');\nstore.seen = store.seen || [];\nconst out = [];\nfor (const item of $input.all()) {\n  const id = item.json.guid || item.json.link;\n  if (!store.seen.includes(id)) { store.seen.push(id); out.push(item); }\n}\nif (store.seen.length > 8000) store.seen = store.seen.slice(-8000);\nreturn out;"
+      },
+      "id": "6a09370c-59db-4848-94be-29466104a2f1",
+      "name": "Dedupe (new only)",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        4340,
+        1440
+      ]
+    },
+    {
+      "parameters": {
+        "prompt": "=You are a tender analyst for a SECURITY (manpower guarding + electronic/CCTV) and COMMERCIAL CLEANING company based in South East Queensland (within ~50km of Brisbane and the Gold Coast). Security and cleaning are EQUAL priority.\n\nSCOPE: The company ONLY provides security and cleaning SERVICES. Do NOT treat construction, building, refurbishment, or warehouse-build projects as leads — Reject those. BUT if a tender is for security or cleaning SERVICES located AT a construction site, warehouse, depot or building, that IS a valid Security/Cleaning lead — keep it.\n\nReturn ONLY a valid JSON object (no markdown, no code fences, no prose):\n{\n  \"service_type\": \"Security | Cleaning | Both | None\",\n  \"security_type\": \"Manpower/Guarding | Electronic/CCTV | Mixed | N/A\",\n  \"summary\": \"1-2 sentence plain summary\",\n  \"location_text\": \"most specific place named e.g. 'Carrara, Gold Coast' or 'Statewide QLD'\",\n  \"state\": \"QLD | NSW | VIC | SA | WA | TAS | NT | ACT | National\",\n  \"region\": \"SEQ | QLD-statewide | QLD-other | interstate | national\",\n  \"budget_value\": \"value or 'Not Listed'\",\n  \"contract_duration\": \"e.g. '3 years + 2x1yr extension' or 'Not stated'\",\n  \"work_hours_per_week\": \"e.g. '40 hrs/week', '24/7 coverage', or 'Not stated'\",\n  \"ongoing_contract\": true or false,\n  \"deadline\": \"closing date and time exactly as written\",\n  \"close_date_iso\": \"the closing date in YYYY-MM-DD, or '' if unclear\",\n  \"red_flags\": \"licences, prequalification, certs, incumbent, insurance, etc. or 'None found'\",\n  \"buyer_org\": \"the buying organisation / council / department, exactly as named, or ''\",\n  \"contact_name\": \"the tender contact officer's full name if explicitly stated, else ''\",\n  \"contact_role\": \"their position/title if stated, else ''\",\n  \"contact_email\": \"their email if explicitly stated, else ''\",\n  \"contact_phone\": \"their phone if explicitly stated, else ''\",\n  \"tier\": \"A | B | C | Reject\"\n}\n\nCONTACT RULES: Extract buyer_org and contact_* ONLY if the value is explicitly present in the tender text. NEVER invent, guess, or infer an email/phone/name. Government and council tenders usually name a contact officer with an email and phone — capture them verbatim. If absent, return ''.\n\nSetting state and region:\n- Use the closing-time TIMEZONE as a strong state signal. 'Brisbane time' / UTC+10 with NO daylight saving = QLD. 'Canberra/Melbourne/Sydney time' or 'Hobart time' = interstate.\n- region = \"SEQ\" if within ~75km of Brisbane or the Gold Coast: Brisbane, Gold Coast, Logan, Ipswich, Redland, Moreton Bay, Caboolture, Beenleigh, Scenic Rim, Tweed, Sunshine Coast edge.\n- region = \"QLD-statewide\" if a QLD standing offer / panel / 'multiple locations' / 'Queensland' with no single fixed remote site.\n- region = \"QLD-other\" if a specific QLD location far from SEQ (Townsville, Cairns, Mackay, Rockhampton, Gladstone, Gympie, Toowoomba, Mount Isa, Torres Strait, etc.).\n- region = \"interstate\" for a specific non-QLD location. region = \"national\" for Australia-wide.\n\nsecurity_type: Manpower/Guarding for static guards, patrols, crowd control, alarm response, concierge. Electronic/CCTV for camera supply/install, access control, monitoring systems. Mixed if both. N/A for cleaning-only.\n\nTiering (keep recall HIGH; when unsure lean B or C, never invent a Reject):\n- A = security or cleaning, region SEQ or QLD-statewide, ongoing or large, no blocking red flags.\n- B = security or cleaning but smaller/one-off, OR region QLD-other or national.\n- C = security or cleaning is only a minor or incidental part of a larger tender.\n- Reject = NOT a security or cleaning service (pure construction/refurbishment, supply of goods only, IT/cyber security, unrelated professional services).\n\nTender Text:\n{{ $json.text }}"
+      },
+      "id": "77225775-6a74-4f88-b84e-7cf1d67591c8",
+      "name": "Basic LLM Chain",
+      "type": "@n8n/n8n-nodes-langchain.chainLlm",
+      "typeVersion": 1,
+      "position": [
+        4460,
+        1220
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "let raw = ($json.text || '').toString().replace(/```json/gi,'').replace(/```/g,'').trim();\nlet parsed;\ntry { parsed = JSON.parse(raw); } catch (e) { parsed = { tier: 'Reject', parse_error: true }; }\nconst meta = $('Dedupe (new only)').item.json;\nreturn { json: { title: meta.title, link: meta.link, source: meta.source, posted_raw: meta.posted_raw, ...parsed } };"
+      },
+      "id": "920fa6d7-ace2-4749-aef9-7cb08ea75758",
+      "name": "Parse Tender JSON",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        4740,
+        1440
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// === IN-ZONE GATE ===\n// Authoritative whitelist: QLD suburbs/postcodes within 50km of Brisbane & Gold Coast (NSW/interstate excluded).\n// Source: user-supplied list (qld_suburbs_50km_brisbane_gold_coast.pdf).\nconst KEEP_STATEWIDE = true; // set to false to keep ONLY specific in-zone suburbs/postcodes (drop statewide panels)\n\nconst POSTCODES = new Set([\"4000\", \"4001\", \"4005\", \"4006\", \"4007\", \"4008\", \"4009\", \"4010\", \"4011\", \"4012\", \"4013\", \"4014\", \"4017\", \"4018\", \"4019\", \"4020\", \"4021\", \"4022\", \"4025\", \"4030\", \"4031\", \"4032\", \"4034\", \"4035\", \"4036\", \"4037\", \"4051\", \"4053\", \"4054\", \"4055\", \"4059\", \"4060\", \"4061\", \"4064\", \"4065\", \"4066\", \"4068\", \"4069\", \"4070\", \"4073\", \"4074\", \"4075\", \"4076\", \"4077\", \"4078\", \"4101\", \"4102\", \"4103\", \"4104\", \"4105\", \"4106\", \"4107\", \"4108\", \"4109\", \"4110\", \"4111\", \"4112\", \"4113\", \"4114\", \"4115\", \"4116\", \"4117\", \"4118\", \"4119\", \"4120\", \"4121\", \"4122\", \"4123\", \"4124\", \"4125\", \"4127\", \"4128\", \"4129\", \"4130\", \"4131\", \"4132\", \"4133\", \"4151\", \"4152\", \"4153\", \"4154\", \"4155\", \"4156\", \"4157\", \"4158\", \"4159\", \"4160\", \"4161\", \"4163\", \"4164\", \"4165\", \"4169\", \"4170\", \"4171\", \"4172\", \"4173\", \"4174\", \"4178\", \"4179\", \"4183\", \"4184\", \"4205\", \"4207\", \"4208\", \"4209\", \"4210\", \"4211\", \"4212\", \"4213\", \"4214\", \"4215\", \"4216\", \"4217\", \"4218\", \"4219\", \"4220\", \"4221\", \"4223\", \"4224\", \"4225\", \"4226\", \"4227\", \"4228\", \"4270\", \"4271\", \"4272\", \"4275\", \"4280\", \"4285\", \"4300\", \"4301\", \"4303\", \"4304\", \"4305\", \"4306\", \"4307\", \"4311\", \"4312\", \"4340\", \"4346\", \"4500\", \"4501\", \"4502\", \"4503\", \"4504\", \"4505\", \"4506\", \"4507\", \"4508\", \"4509\", \"4510\", \"4511\", \"4520\", \"4521\"]);\nconst SUBURBS = new Set([\"acacia ridge\", \"advancetown\", \"albany creek\", \"alberton\", \"albion\", \"alderley\", \"alexandra hills\", \"algester\", \"allenview\", \"altandi\", \"amberley\", \"amity\", \"amity point\", \"anglers paradise\", \"annerley\", \"anstead\", \"arana hills\", \"archerfield\", \"armstrong creek\", \"arundel\", \"ascot\", \"ashgrove\", \"ashgrove east\", \"ashgrove west\", \"ashmore\", \"ashwell\", \"aspley\", \"auchenflower\", \"augustine heights\", \"austinville\", \"avoca vale\", \"bahrs scrub\", \"bald hills\", \"balingool\", \"ballymore\", \"balmoral\", \"banks creek\", \"banksia beach\", \"bannockburn\", \"banoon\", \"banyo\", \"bardon\", \"bardon west\", \"barellan point\", \"baroona\", \"basin pocket\", \"beachmere\", \"beaudesert\", \"beechmont\", \"beenleigh\", \"belivah\", \"bellara\", \"bellbird park\", \"bellbowrie\", \"bellhaven\", \"bellmere\", \"belmont\", \"belmont heights\", \"benobble\", \"benowa\", \"berrinba\", \"bethania\", \"biddaddaba\", \"biggera waters\", \"bilinga\", \"binna burra\", \"birkdale\", \"blacksoil\", \"blackstone\", \"blackwall\", \"bloomfleet\", \"bongaree\", \"bonogin\", \"boondall\", \"booval\", \"borallon\", \"boronia heights\", \"bowen bridge\", \"bowen hills\", \"boykambil\", \"boyland\", \"bracken ridge\", \"brassall\", \"brassall heights\", \"bray park\", \"breakfast creek\", \"bremer\", \"brendale\", \"bribie island\", \"bribie island north\", \"bridgeman downs\", \"brighton\", \"brighton eventide\", \"brisbane\", \"brisbane airport\", \"brisbane city\", \"brisbane exhibition\", \"broadbeach\", \"broadbeach waters\", \"bromelton\", \"brookfield\", \"brookwater\", \"browns plains\", \"brownsleigh\", \"bryden\", \"buccan\", \"bulimba\", \"bulwer island\", \"bundall\", \"bundamba\", \"bunya\", \"buranda\", \"burbank\", \"burleigh heads\", \"burleigh town\", \"burleigh waters\", \"burpengary\", \"burpengary east\", \"cabbage tree point\", \"caboolture\", \"caboolture south\", \"cainbable\", \"calamvale\", \"camira\", \"camp hill\", \"camp mountain\", \"campbells pocket\", \"cannon hill\", \"canowindra\", \"canungra\", \"capalaba\", \"capalaba west\", \"carbrook\", \"carina\", \"carina heights\", \"carina north\", \"carindale\", \"carole park\", \"carrara\", \"carseldine\", \"cashmere\", \"cashs crossing\", \"cedar creek\", \"cedar grove\", \"cedar vale\", \"chambers flat\", \"chandler\", \"chapel hill\", \"chatswood hills\", \"chelmer\", \"chermside\", \"chermside south\", \"chermside west\", \"chevron island\", \"chirn park\", \"christmas creek\", \"churchill\", \"chuwar\", \"clagiraba\", \"clarendon\", \"clayfield\", \"clear island waters\", \"clear mountain\", \"cleveland\", \"clifton hill\", \"clontarf\", \"clontarf beach\", \"closeburn\", \"coalfalls\", \"collingwood park\", \"colmslie\", \"coochiemudlo island\", \"coolana\", \"coolangatta\", \"coombabah\", \"coomera\", \"coopers plains\", \"coorparoo\", \"corinda\", \"cornubia\", \"craigslea\", \"crestmead\", \"cryna\", \"currigee\", \"currumbin\", \"currumbin valley\", \"currumbin waters\", \"daisy hill\", \"dakabin\", \"darlington\", \"darra\", \"dayboro\", \"deagon\", \"deception bay\", \"deebing heights\", \"dinmore\", \"doboy\", \"dohles rocks\", \"doolandella\", \"doomben\", \"dorrington\", \"draper\", \"drewvale\", \"dundas\", \"dunwich\", \"durack\", \"dutton park\", \"eagle farm\", \"eagle heights\", \"eagle junction\", \"eagleby\", \"east brisbane\", \"east ipswich\", \"eastern heights\", \"eatons hill\", \"ebbw vale\", \"ebenezer\", \"edens landing\", \"eight mile plains\", \"eildon hill\", \"ekibin\", \"elanora\", \"ellen grove\", \"england creek\", \"enoggera\", \"enoggera reservoir\", \"erobin\", \"everton hills\", \"everton park\", \"fairfield\", \"fairney view\", \"fernvale\", \"ferny glen\", \"ferny grove\", \"ferny hills\", \"fig tree pocket\", \"fitzgibbon\", \"flinders lakes\", \"flinders view\", \"florida gardens\", \"flying fox\", \"forest glade\", \"forest lake\", \"forestdale\", \"fortitude valley\", \"frenchs forest\", \"fruitgrove\", \"gailes\", \"galloways hill\", \"gaven\", \"gaythorne\", \"geebung\", \"gilberton\", \"gilston\", \"glamorgan vale\", \"glen kedron\", \"gleneagle\", \"glenlogan\", \"godwin beach\", \"gold coast\", \"goodna\", \"goodna east\", \"goolman\", \"gordon park\", \"graceville\", \"graceville east\", \"grange\", \"greenbank\", \"greenslopes\", \"greenwood village\", \"griffin\", \"grovely\", \"guanaba\", \"gumdale\", \"haigslea\", \"halfway creek\", \"hamilton\", \"hamilton central\", \"hawthorne\", \"heathwood\", \"helensvale\", \"hemmant\", \"hendra\", \"heritage park\", \"herston\", \"highgate hill\", \"highland park\", \"highvale\", \"hillcrest\", \"hillview\", \"holland park\", \"holland park east\", \"holland park west\", \"hollywell\", \"holmview\", \"holts hill\", \"hope island\", \"humpybong\", \"ilbogan\", \"illinbah\", \"inala\", \"inala east\", \"inala heights\", \"inala west\", \"indooroopilly\", \"ingleside\", \"ipswich\", \"ironbark\", \"isle of capri\", \"ithaca\", \"jacobs well\", \"jamboree heights\", \"jeebropilly\", \"jimboomba\", \"jindalee\", \"jollys lookout\", \"josephville\", \"joyner\", \"jubilee\", \"kagaru\", \"kairabah\", \"kalinga\", \"kallangur\", \"kangaroo point\", \"karalee\", \"karana downs\", \"karawatha\", \"karrabin\", \"karragarra island\", \"kedron\", \"kedron upper\", \"keebra park\", \"kelvin grove\", \"kenmore\", \"kenmore east\", \"kenmore hills\", \"keperra\", \"kerry\", \"kerrydale\", \"kholo\", \"kimberley park\", \"king scrub\", \"kingsholme\", \"kingston\", \"kippa-ring\", \"kirra\", \"knapp creek\", \"kobble creek\", \"kooringal\", \"kuraby\", \"kurwongbah\", \"labrador\", \"laceys creek\", \"lake manchester\", \"lamb island\", \"lamington national park\", \"larapinta\", \"laravale\", \"lark hill\", \"latimer\", \"lawnton\", \"leichhardt\", \"lindum\", \"loamside\", \"logan\", \"logan central\", \"logan reserve\", \"logan village\", \"logandale\", \"loganholme\", \"loganlea\", \"lone pine\", \"long pocket\", \"loreto hill\", \"lota\", \"lower beechmont\", \"lowood\", \"luscombe\", \"lutwyche\", \"lyons\", \"lytton\", \"macgregor\", \"mackenzie\", \"maclean\", \"macleay island\", \"main beach\", \"mango hill\", \"manly\", \"manly west\", \"mansfield\", \"marburg\", \"margate\", \"margate beach\", \"marsden\", \"maudsland\", \"mayne\", \"mcdowall\", \"meadowbrook\", \"meeandah\", \"meldale\", \"mermaid beach\", \"mermaid keys\", \"mermaid waters\", \"merrimac\", \"miami\", \"miami keys\", \"middle park\", \"milton\", \"minden\", \"mitchelton\", \"moana park\", \"moggill\", \"molendinar\", \"monarch glen\", \"monsildale\", \"monterey keys\", \"moodlu\", \"moores pocket\", \"moorina\", \"moorooka\", \"moorvale\", \"morayfield\", \"moreton bay\", \"moreton island\", \"morningside\", \"mount coot-tha\", \"mount cotton\", \"mount crosby\", \"mount glorious\", \"mount gravatt\", \"mount gravatt east\", \"mount marrow\", \"mount nathan\", \"mount nebo\", \"mount ommaney\", \"mount pleasant\", \"mount samson\", \"mount tamborine\", \"mount thompson\", \"mount warren park\", \"mudgeeraba\", \"muirlea\", \"mundoolun\", \"munruben\", \"murarrie\", \"murrumba downs\", \"mutdapilly\", \"myrtletown\", \"narangba\", \"nashville\", \"nathan\", \"natural bridge\", \"nerang\", \"neranwood\", \"new beith\", \"new chum\", \"new farm\", \"newmarket\", \"newport\", \"newstead\", \"newtown\", \"nindooinbah\", \"ningi\", \"nobby beach\", \"norman park\", \"normanby\", \"north booval\", \"north ipswich\", \"north lakes\", \"north maclean\", \"north stradbroke island\", \"north tamborine\", \"north tivoli\", \"northgate\", \"norwell\", \"nudgee\", \"nudgee beach\", \"numinbah valley\", \"nundah\", \"o'reilly\", \"o'reillys\", \"ocean view\", \"one mile\", \"opossum creek\", \"ormeau\", \"ormeau hills\", \"ormiston\", \"oxenford\", \"oxford park\", \"oxley\", \"pacific pines\", \"paddington\", \"pallara\", \"palm beach\", \"paradise island\", \"paradise point\", \"paradise point keys\", \"paradise waters\", \"park ridge\", \"park ridge south\", \"parkinson\", \"parkwood\", \"patrick estate\", \"peak crossing\", \"peel island\", \"perulpa island\", \"petrie\", \"petrie terrace\", \"pimpama\", \"pindari hills\", \"pine mountain\", \"pinjarra hills\", \"pinkenba\", \"pinklands\", \"point halloran\", \"point talburpin\", \"port of brisbane\", \"priestdale\", \"priests gully\", \"priors pocket\", \"pullenvale\", \"purga\", \"raceview\", \"rainbow bay\", \"rainworth\", \"ransome\", \"raymonds hill\", \"red hill\", \"redbank\", \"redbank plains\", \"redcliffe\", \"redcliffe north\", \"redland\", \"redland bay\", \"redlands\", \"reedy creek\", \"regents park\", \"rialto\", \"richlands\", \"rifle range\", \"rio vista\", \"ripley\", \"riverbend\", \"riverhills\", \"riverview\", \"robertson\", \"robina\", \"rochedale\", \"rochedale south\", \"rocklea\", \"rocksberg\", \"rosewood\", \"rothwell\", \"runaway bay\", \"runcorn\", \"rush creek\", \"russell island\", \"sadliers crossing\", \"salisbury\", \"salisbury east\", \"samford\", \"samford valley\", \"samford village\", \"samsonvale\", \"sanctuary cove\", \"sandgate\", \"sandstone point\", \"santa barbara\", \"sarabah\", \"scarborough\", \"scotts point\", \"serviceton\", \"seven hills\", \"seventeen mile\", \"seventeen mile rocks\", \"shailer park\", \"sheldon\", \"sherwood\", \"shorncliffe\", \"silkstone\", \"silverbark ridge\", \"sinnamon park\", \"slacks creek\", \"somerset hills\", \"sorrento\", \"south bank\", \"south brisbane\", \"south maclean\", \"south ripley\", \"south stradbroke\", \"southern lamington\", \"southport\", \"sovereign islands\", \"split yard creek\", \"spring hill\", \"spring mountain\", \"springbrook\", \"springfield\", \"springfield central\", \"springfield lakes\", \"springwood\", \"st johns wood\", \"stafford\", \"stafford heights\", \"stanley bridge\", \"stapylton\", \"steiglitz\", \"stockleigh\", \"stones corner\", \"strathpine\", \"strathpine city\", \"stretton\", \"stuartholme\", \"studio village\", \"sumner\", \"sundale\", \"sunnybank\", \"sunnybank hills\", \"sunnybank south\", \"surfers paradise\", \"swanbank\", \"tabooba\", \"tabragalba\", \"taigum\", \"tallai\", \"tallebudgera\", \"tallebudgera valley\", \"tallegalla\", \"tally valley\", \"tamborine\", \"tamborine mountain\", \"tamborine village\", \"tamrookum creek\", \"tanah merah\", \"tangalooma\", \"tarampa\", \"taringa\", \"tarragindi\", \"teelah\", \"teneriffe\", \"tennyson\", \"thagoona\", \"the gap\", \"the spit\", \"thompson estate\", \"thorneside\", \"thornlands\", \"tingalpa\", \"tivoli\", \"toombul\", \"toorbul\", \"toowong\", \"torwood\", \"trinder park\", \"tugun\", \"tugun heights\", \"underwood\", \"upper brookfield\", \"upper caboolture\", \"upper coomera\", \"upper kedron\", \"upper mount gravatt\", \"varsity lakes\", \"veresdale\", \"veresdale scrub\", \"vernor\", \"victoria point\", \"victoria point west\", \"virginia\", \"wacol\", \"wacol east immigration centre\", \"wakerley\", \"walloon\", \"wanora\", \"warner\", \"washpool\", \"waterford\", \"waterford west\", \"wavell heights\", \"wavell heights north\", \"wellers hill\", \"wellington point\", \"west amberley\", \"west burleigh\", \"west end\", \"west ipswich\", \"westlake\", \"whinstanes\", \"white patch\", \"white rock\", \"whites hill\", \"whiteside\", \"wights mountain\", \"willawong\", \"willow vale\", \"willowbank\", \"wilston\", \"windaroo\", \"windsor\", \"wishart\", \"witheren\", \"wivenhoe\", \"wivenhoe hill\", \"wivenhoe pocket\", \"wolffdene\", \"wongawallan\", \"wonglepong\", \"woodend\", \"woodhill\", \"woodridge\", \"woodridge east\", \"woody point\", \"woolloongabba\", \"wooloowin\", \"woongoolba\", \"woorim\", \"worongary\", \"wulkuraka\", \"wynnum\", \"wynnum central\", \"wynnum north\", \"wynnum west\", \"yamanto\", \"yarrabilba\", \"yatala\", \"yeerongpilly\", \"yellow wood\", \"yeronga\", \"yeronga west\", \"yugar\", \"zillmere\"]);\n\nconst norm = s => (s || '').toString().toLowerCase();\nconst INTERSTATE = ['nsw','vic','sa','wa','tas','nt','act','new south wales','victoria','tasmania'];\n\nconst out = [];\nfor (const item of $input.all()) {\n  const j = item.json;\n  if (!['A','B','C'].includes(j.tier)) continue;\n\n  const region = norm(j.region);\n  const state  = norm(j.state);\n  const loc    = norm(j.location_text);\n\n  // hard reject anything interstate\n  if (region === 'interstate' || INTERSTATE.includes(state)) continue;\n\n  let inzone = '';\n\n  // 1) statewide panels are serviceable from SEQ (toggle above)\n  if (KEEP_STATEWIDE && region === 'qld-statewide') inzone = 'Statewide';\n\n  // 2) postcode match on the primary location text\n  if (!inzone) {\n    const found = (loc.match(/\\b4\\d{3}\\b/g) || []);\n    if (found.some(pc => POSTCODES.has(pc))) inzone = 'Yes (postcode)';\n  }\n\n  // 3) suburb / SEQ-city name match (word-boundary) on the primary location text\n  if (!inzone) {\n    for (const sub of SUBURBS) {\n      if (sub.length < 4) continue;\n      const re = new RegExp('(^|[^a-z])' + sub.replace(/[.*+?^${}()|[\\]\\\\]/g, '\\\\$&') + '([^a-z]|$)');\n      if (re.test(loc)) { inzone = 'Yes (suburb)'; break; }\n    }\n  }\n\n  if (!inzone) continue;                 // not in the 50km list -> drop\n  if (inzone.startsWith('Yes')) j.region = 'SEQ';   // normalise for the sheet\n  j.InZone = inzone;\n  out.push({ json: j });\n}\nreturn out;\n"
+      },
+      "id": "adbb0d92-af2a-4f33-a747-be5f86513056",
+      "name": "In-Zone Gate",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        4940,
+        1440
+      ]
+    },
+    {
+      "parameters": {
+        "prompt": "=Write a short, ready-to-edit Expression of Interest opening that a South East Queensland security & cleaning contractor could send in response to this tender. 4-6 sentences, professional and warm. Name the buyer and the specific service required, highlight relevant strengths (fully licensed and accredited, rapid local SEQ response, proven on ongoing/contracted work), and finish with a line inviting the next step. Use [bracketed placeholders] for company-specific details. Plain text only, no markdown, no headings.\n\nTender: {{ $json.title }}\nService: {{ $json.service_type }} ({{ $json.security_type }})\nLocation: {{ $json.location_text }} ({{ $json.region }})\nContract: {{ $json.contract_duration }} | Hours: {{ $json.work_hours_per_week }}\nSummary: {{ $json.summary }}"
+      },
+      "id": "a6400829-c2a7-4fd1-888d-95fe0c0571dd",
+      "name": "Write Bid Draft",
+      "type": "@n8n/n8n-nodes-langchain.chainLlm",
+      "typeVersion": 1,
+      "position": [
+        5140,
+        1440
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "const meta = $('In-Zone Gate').item.json;\nreturn { json: { ...meta, bid_draft: ($json.text || '').toString().trim() } };"
+      },
+      "id": "4e0b2ff1-16f2-493a-9ef8-6dedce5a1a00",
+      "name": "Attach Draft",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        5360,
+        1160
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const fmt = (d) => { try { const x = new Date(d); return isNaN(x) ? '' : x.toLocaleDateString('en-AU', { timeZone: 'Australia/Brisbane' }); } catch (e) { return ''; } };\nconst capturedTs = new Date().toLocaleString('en-AU', { timeZone: 'Australia/Brisbane' });\nconst today = new Date();\nreturn $input.all().map(it => {\n  const j = it.json;\n  const close = j.close_date_iso ? new Date(j.close_date_iso) : null;\n  const daysToClose = (close && !isNaN(close)) ? Math.round((close - today) / 86400000) : '';\n  return { json: {\n    RowID: (j.guid || j.link || (j.title||'')).toString().slice(0,180).replace(/[\\t\\n]/g,' '),\n    Captured: capturedTs,\n    HumanApproval: 'Pending',\n    DocumentLink: '',\n    Tier: j.tier || '',\n    Service: j.service_type || '',\n    SecurityType: j.security_type || '',\n    Title: j.title || '',\n    Location: j.location_text || '',\n    Region: j.region || '',\n    State: j.state || '',\n    Budget: j.budget_value || '',\n    ContractDuration: j.contract_duration || '',\n    WorkHours: j.work_hours_per_week || '',\n    Posted: j.posted_raw ? fmt(j.posted_raw) : '',\n    Deadline: j.deadline || '',\n    DaysToClose: daysToClose,\n    RedFlags: j.red_flags || '',\n    Summary: j.summary || '',\n    BuyerOrg: j.buyer_org || '',\n    ContactName: j.contact_name || '',\n    ContactRole: j.contact_role || '',\n    ContactEmail: j.contact_email || '',\n    ContactPhone: j.contact_phone || '',\n    BidDraft: j.bid_draft || '',\n    Source: j.source || '',\n    Link: j.link || ''\n  }};\n});"
+      },
+      "id": "2e43a3bf-5183-4a10-8a48-dfc6c84859f7",
+      "name": "Format for Sheets",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        5540,
+        1440
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "1YrekkkB-YjNAhWA1A-VYMxCcEl8A-UB5d627_zx7fEY",
+          "mode": "list",
+          "cachedResultName": "Tender sheets ",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1YrekkkB-YjNAhWA1A-VYMxCcEl8A-UB5d627_zx7fEY/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 1020027150,
+          "mode": "list",
+          "cachedResultName": "Claude v3",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1YrekkkB-YjNAhWA1A-VYMxCcEl8A-UB5d627_zx7fEY/edit#gid=1020027150"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Captured": "={{ $json.Captured }}",
+            "Tier": "={{ $json.Tier }}",
+            "Service": "={{ $json.Service }}",
+            "SecurityType": "={{ $json.SecurityType }}",
+            "Title": "={{ $json.Title }}",
+            "Location": "={{ $json.Location }}",
+            "Region": "={{ $json.Region }}",
+            "State": "={{ $json.State }}",
+            "Budget": "={{ $json.Budget }}",
+            "ContractDuration": "={{ $json.ContractDuration }}",
+            "WorkHours": "={{ $json.WorkHours }}",
+            "Posted": "={{ $json.Posted }}",
+            "Deadline": "={{ $json.Deadline }}",
+            "DaysToClose": "={{ $json.DaysToClose }}",
+            "RedFlags": "={{ $json.RedFlags }}",
+            "Summary": "={{ $json.Summary }}",
+            "BuyerOrg": "={{ $json.BuyerOrg }}",
+            "ContactName": "={{ $json.ContactName }}",
+            "ContactRole": "={{ $json.ContactRole }}",
+            "ContactEmail": "={{ $json.ContactEmail }}",
+            "ContactPhone": "={{ $json.ContactPhone }}",
+            "BidDraft": "={{ $json.BidDraft }}",
+            "Source": "={{ $json.Source }}",
+            "Link": "={{ $json.Link }}",
+            "RowID": "={{ $json.RowID }}",
+            "HumanApproval": "={{ $json.HumanApproval }}",
+            "DocumentLink": "={{ $json.DocumentLink }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "RowID",
+              "displayName": "RowID",
+              "required": false,
+              "defaultMatch": true,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Captured",
+              "displayName": "Captured",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Tier",
+              "displayName": "Tier",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Service",
+              "displayName": "Service",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "SecurityType",
+              "displayName": "SecurityType",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Title",
+              "displayName": "Title",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Location",
+              "displayName": "Location",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Region",
+              "displayName": "Region",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "State",
+              "displayName": "State",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Budget",
+              "displayName": "Budget",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "ContractDuration",
+              "displayName": "ContractDuration",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "WorkHours",
+              "displayName": "WorkHours",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Posted",
+              "displayName": "Posted",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Deadline",
+              "displayName": "Deadline",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "DaysToClose",
+              "displayName": "DaysToClose",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "RedFlags",
+              "displayName": "RedFlags",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Summary",
+              "displayName": "Summary",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "BuyerOrg",
+              "displayName": "BuyerOrg",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "ContactName",
+              "displayName": "ContactName",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "ContactRole",
+              "displayName": "ContactRole",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "ContactEmail",
+              "displayName": "ContactEmail",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "ContactPhone",
+              "displayName": "ContactPhone",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "BidDraft",
+              "displayName": "BidDraft",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Source",
+              "displayName": "Source",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Link",
+              "displayName": "Link",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "HumanApproval",
+              "displayName": "HumanApproval",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "DocumentLink",
+              "displayName": "DocumentLink",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": true
+        },
+        "options": {}
+      },
+      "id": "1544bfbd-5895-43b8-b2fb-c22577d45d0e",
+      "name": "Google Sheets",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.2,
+      "position": [
+        5740,
+        1440
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "HLZxRgOR9Y2XBrnV",
+          "name": "Sheets permission(14/07/2026)"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": false,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "t1",
+              "leftValue": "={{ $json.Tier }}",
+              "rightValue": "A",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            },
+            {
+              "id": "t2",
+              "leftValue": "={{ $json.Tier }}",
+              "rightValue": "B",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "or"
+        },
+        "options": {}
+      },
+      "id": "aa10bb20-0001-4a10-9a10-newalertfilter",
+      "name": "High-Priority New Tender?",
+      "type": "n8n-nodes-base.filter",
+      "typeVersion": 2,
+      "position": [
+        5760,
+        1180
+      ]
+    },
+    {
+      "parameters": {
+        "select": "channel",
+        "channelId": {
+          "__rl": true,
+          "value": "C0B6K8652GM",
+          "mode": "list",
+          "cachedResultName": "hermes-testing"
+        },
+        "text": "=:mega: *New tender — Tier {{ $json.Tier }} ({{ $json.Service }})*\n\n*{{ $json.Title }}*\n:round_pushpin: {{ $json.Location }}  |  {{ $json.Region }}\n:alarm_clock: Closes: {{ $json.Deadline }}  ({{ $json.DaysToClose }} days)\n:office: {{ $json.BuyerOrg }}\n:telephone_receiver: {{ $json.ContactName }}  {{ $json.ContactEmail }}  {{ $json.ContactPhone }}\n\n{{ $json.Summary }}\n\nApprove in the sheet, then paste the DocumentLink.\n{{ $json.Link }}",
+        "otherOptions": {}
+      },
+      "id": "aa10bb20-0002-4a10-9a10-newalertslack",
+      "name": "Slack - New Tender",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.2,
+      "position": [
+        5980,
+        1180
+      ],
+      "webhookId": "b1508ce0-0000-4f04-876c-newtenderalert",
+      "credentials": {
+        "slackApi": {
+          "id": "wBwfpnkQv3zlsz8V",
+          "name": "n8n BOT "
+        }
+      }
+    },
+    {
+      "parameters": {
+        "model": "google/gemini-2.5-flash-lite",
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenRouter",
+      "typeVersion": 1,
+      "position": [
+        4480,
+        1380
+      ],
+      "id": "23a5c962-bf97-45c2-87e7-19d36aa6d5ce",
+      "name": "OpenRouter Chat Model",
+      "credentials": {
+        "openRouterApi": {
+          "id": "QhsMW1GW3kISMgNL",
+          "name": "N8N - 11/2/26"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "model": "google/gemini-2.5-flash-lite",
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenRouter",
+      "typeVersion": 1,
+      "position": [
+        5200,
+        1660
+      ],
+      "id": "c7fc1abb-5aa1-4c96-99d9-4e517b41d044",
+      "name": "OpenRouter Chat Model1",
+      "credentials": {
+        "openRouterApi": {
+          "id": "QhsMW1GW3kISMgNL",
+          "name": "N8N - 11/2/26"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Schedule Trigger": {
+      "main": [
+        [
+          {
+            "node": "Fetch AusTender RSS",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Fetch VendorPanel RSS",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Fetch Brisbane CC",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Fetch Extra RSS",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Read Watchlist",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch AusTender RSS": {
+      "main": [
+        [
+          {
+            "node": "Convert XML to JSON",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Convert XML to JSON": {
+      "main": [
+        [
+          {
+            "node": "Split Tender Items",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Split Tender Items": {
+      "main": [
+        [
+          {
+            "node": "Normalize (AusTender)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalize (AusTender)": {
+      "main": [
+        [
+          {
+            "node": "Keyword (AusTender)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Keyword (AusTender)": {
+      "main": [
+        [
+          {
+            "node": "Download Webpage",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Download Webpage": {
+      "main": [
+        [
+          {
+            "node": "Extract HTML Text",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract HTML Text": {
+      "main": [
+        [
+          {
+            "node": "Build Item (AusTender)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Item (AusTender)": {
+      "main": [
+        [
+          {
+            "node": "Dedupe (new only)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch VendorPanel RSS": {
+      "main": [
+        [
+          {
+            "node": "Convert XML to JSON (VP)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Convert XML to JSON (VP)": {
+      "main": [
+        [
+          {
+            "node": "Split Tender Items (VP)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Split Tender Items (VP)": {
+      "main": [
+        [
+          {
+            "node": "Normalize (VendorPanel)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalize (VendorPanel)": {
+      "main": [
+        [
+          {
+            "node": "Keyword (VendorPanel)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Keyword (VendorPanel)": {
+      "main": [
+        [
+          {
+            "node": "Dedupe (new only)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch Brisbane CC": {
+      "main": [
+        [
+          {
+            "node": "Extract BCC Rows",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract BCC Rows": {
+      "main": [
+        [
+          {
+            "node": "Split BCC Rows",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Split BCC Rows": {
+      "main": [
+        [
+          {
+            "node": "Normalize (BCC)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalize (BCC)": {
+      "main": [
+        [
+          {
+            "node": "Keyword (BCC)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Keyword (BCC)": {
+      "main": [
+        [
+          {
+            "node": "Dedupe (new only)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch Extra RSS": {
+      "main": [
+        [
+          {
+            "node": "Convert XML (Extra)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Convert XML (Extra)": {
+      "main": [
+        [
+          {
+            "node": "Split (Extra)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Split (Extra)": {
+      "main": [
+        [
+          {
+            "node": "Normalize (Extra)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalize (Extra)": {
+      "main": [
+        [
+          {
+            "node": "Keyword (Extra)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Keyword (Extra)": {
+      "main": [
+        [
+          {
+            "node": "Dedupe (new only)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read Watchlist": {
+      "main": [
+        [
+          {
+            "node": "Scrape Watchlist",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Scrape Watchlist": {
+      "main": [
+        [
+          {
+            "node": "Dedupe (new only)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Dedupe (new only)": {
+      "main": [
+        [
+          {
+            "node": "Basic LLM Chain",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Basic LLM Chain": {
+      "main": [
+        [
+          {
+            "node": "Parse Tender JSON",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Tender JSON": {
+      "main": [
+        [
+          {
+            "node": "In-Zone Gate",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "In-Zone Gate": {
+      "main": [
+        [
+          {
+            "node": "Write Bid Draft",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Write Bid Draft": {
+      "main": [
+        [
+          {
+            "node": "Attach Draft",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Attach Draft": {
+      "main": [
+        [
+          {
+            "node": "Format for Sheets",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format for Sheets": {
+      "main": [
+        [
+          {
+            "node": "Google Sheets",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "High-Priority New Tender?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "High-Priority New Tender?": {
+      "main": [
+        [
+          {
+            "node": "Slack - New Tender",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenRouter Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Basic LLM Chain",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenRouter Chat Model1": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Write Bid Draft",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {},
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "74525d77094878c8cbd9cb45a42b56910d34ea5065046e05f07447a7ea8ef173"
+  }
+}

@@ -1,0 +1,821 @@
+{
+  "name": "Deep Analysis (v3)",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "minutes"
+            }
+          ]
+        }
+      },
+      "id": "f9fed674-32e2-4196-8e22-067f64969c51",
+      "name": "Poll Every 5 Min",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1,
+      "position": [
+        1840,
+        2980
+      ]
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "1YrekkkB-YjNAhWA1A-VYMxCcEl8A-UB5d627_zx7fEY",
+          "mode": "list",
+          "cachedResultName": "Tender sheets "
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 1020027150,
+          "mode": "list",
+          "cachedResultName": "Claude v3"
+        },
+        "options": {}
+      },
+      "id": "df89cb6c-a95d-4970-998e-b5113209855f",
+      "name": "Read Triage Sheet",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.2,
+      "position": [
+        2060,
+        2980
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "MBav801SL7NMz5c8",
+          "name": "Google Sheets account 2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const clean = (v) => (v == null ? '' : v.toString()).replace(/[\\u200B-\\u200D\\uFEFF]/g, '').trim();\nreturn $input.all().filter(item => {\n  const approval = clean(item.json.HumanApproval).toLowerCase();\n  const link = clean(item.json.DocumentLink);\n  return approval === 'approved' && link.length > 0;\n});"
+      },
+      "id": "e0dc5742-a5bc-4439-92e8-bceb7c69e74d",
+      "name": "Approved + Link Provided",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2300,
+        2940
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const clean = (v) => (v == null ? '' : v.toString()).replace(/[\\u200B-\\u200D\\uFEFF]/g, '').trim();\nreturn $input.all().filter(item => {\n  const approval = clean(item.json.HumanApproval).toLowerCase();\n  const link = clean(item.json.DocumentLink);\n  return approval === 'approved' && link.length === 0;\n});"
+      },
+      "id": "e24655a8-4e5e-46b5-b9f1-56d330793316",
+      "name": "Approved Awaiting Document",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2300,
+        3200
+      ]
+    },
+    {
+      "parameters": {
+        "select": "channel",
+        "channelId": {
+          "__rl": true,
+          "value": "C0B6K8652GM",
+          "mode": "list",
+          "cachedResultName": "hermes-testing"
+        },
+        "text": "=:rotating_light: *Tender approved — document needed*\n\n*{{ $json.Title }}*\n{{ ($json.Source || '').toString().toLowerCase().includes('vendorpanel') ? 'VendorPanel: log in, open the tender, click *Register Interest*, download the pack, upload it to Drive, then paste the file link into the DocumentLink column.' : (($json.Source || '').toString().toLowerCase().includes('austender') ? 'AusTender: open the ATM link, download the documents (most need no login), upload to Drive, then paste the file link into DocumentLink.' : 'Open the portal below, download the tender pack, upload it to Drive, then paste the file link into the DocumentLink column.') }}\n\nSource: {{ $json.Source }}\nPortal link: {{ $json.Link }}",
+        "otherOptions": {}
+      },
+      "id": "2f85e4d7-d612-4c71-b37d-80419d4fee9b",
+      "name": "Slack - Document Needed",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.2,
+      "position": [
+        2560,
+        3200
+      ],
+      "webhookId": "821508ce-90bc-4f04-876c-cae7fac4d0ef",
+      "credentials": {
+        "slackApi": {
+          "id": "wBwfpnkQv3zlsz8V",
+          "name": "n8n BOT "
+        }
+      }
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "const link = ($json.DocumentLink || '').toString();\nlet fileId = '';\nlet m = link.match(/\\/d\\/([a-zA-Z0-9_-]{20,})/);\nif (m) fileId = m[1];\nif (!fileId) { m = link.match(/[?&]id=([a-zA-Z0-9_-]{20,})/); if (m) fileId = m[1]; }\nreturn { json: { ...$json, fileId } };"
+      },
+      "id": "8e9a9c86-ebc5-4f46-a03a-4e6e0a0c0975",
+      "name": "Extract Drive File ID",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2560,
+        2940
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "download",
+        "fileId": {
+          "__rl": true,
+          "value": "={{ $json.fileId }}",
+          "mode": "id"
+        },
+        "options": {
+          "binaryPropertyName": "data"
+        }
+      },
+      "id": "0bbb40c5-1132-4f74-b204-e8c6c1326126",
+      "name": "Download from Drive",
+      "type": "n8n-nodes-base.googleDrive",
+      "typeVersion": 3,
+      "position": [
+        2780,
+        2940
+      ],
+      "credentials": {
+        "googleDriveOAuth2Api": {
+          "id": "EpuvamQLguwYGQwy",
+          "name": "U Agent "
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": false,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 1
+          },
+          "conditions": [
+            {
+              "id": "z1",
+              "leftValue": "={{ ($binary.data.mimeType || '').toString() }}",
+              "rightValue": "zip",
+              "operator": {
+                "type": "string",
+                "operation": "contains"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "e73b627f-f5c4-402b-a0c1-d5ff15ab5bae",
+      "name": "Is Zip?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        3000,
+        2940
+      ]
+    },
+    {
+      "parameters": {},
+      "id": "e692b96d-4843-46ca-9d1d-7fc9359fc1cd",
+      "name": "Unzip Tender Pack",
+      "type": "n8n-nodes-base.compression",
+      "typeVersion": 1.1,
+      "position": [
+        3220,
+        2780
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "pdf",
+        "binaryPropertyName": "file_2",
+        "options": {}
+      },
+      "id": "d3c7cf95-6512-47f1-9439-9520a99866f7",
+      "name": "Extract PDF (Summary)",
+      "type": "n8n-nodes-base.extractFromFile",
+      "typeVersion": 1,
+      "position": [
+        3440,
+        2580
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "xlsx",
+        "binaryPropertyName": "file_1",
+        "options": {}
+      },
+      "id": "9a7f01f0-d136-4128-b365-b3d06d4fdaf1",
+      "name": "Extract XLSX (Requirements)",
+      "type": "n8n-nodes-base.extractFromFile",
+      "typeVersion": 1,
+      "position": [
+        3460,
+        2760
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "xlsx",
+        "binaryPropertyName": "file_5",
+        "options": {}
+      },
+      "id": "040a24ae-62fd-4fb6-96db-0e291d36cd97",
+      "name": "Extract XLSX (Pricing)",
+      "type": "n8n-nodes-base.extractFromFile",
+      "typeVersion": 1,
+      "position": [
+        3460,
+        2920
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Combine extracted texts from PDF + XLSX files (JSON only, no binary)\nconst items = $input.all();\nconst meta = $('Extract Drive File ID').first().json;\nlet combined = '';\nfor (const item of items) {\n  const j = item.json;\n  if (typeof j.text === 'string' && j.text.length > 0) {\n    combined += '\\n\\n===== PDF SUMMARY =====\\n' + j.text;\n  } else {\n    // XLSX data comes as JSON rows - stringify it\n    const keys = Object.keys(j).filter(k => k !== 'text');\n    if (keys.length > 0) {\n      combined += '\\n\\n===== SPREADSHEET DATA =====\\n' + JSON.stringify(j, null, 1);\n    }\n  }\n}\nreturn [{ json: {\n  RowID: meta.RowID || '',\n  title: meta.Title || '',\n  link: meta.Link || '',\n  doc_text: combined.replace(/[\\t ]+/g, ' ').slice(0, 250000)\n} }];"
+      },
+      "id": "762b9796-3fb5-4613-b380-2398d373ef10",
+      "name": "Combine Zip Texts",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3700,
+        2840
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "pdf",
+        "options": {}
+      },
+      "id": "5d54f349-5e1e-4071-a82b-dede3c26f1d7",
+      "name": "Extract Single PDF",
+      "type": "n8n-nodes-base.extractFromFile",
+      "typeVersion": 1,
+      "position": [
+        3240,
+        3080
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "const meta = $('Extract Drive File ID').first().json;\nreturn { json: {\n  RowID: meta.RowID || '',\n  title: meta.Title || '',\n  link: meta.Link || '',\n  doc_text: ($json.text || '').toString().replace(/[\\t ]+/g, ' ').slice(0, 180000)\n} };"
+      },
+      "id": "0c487a5b-6c38-4701-93da-f1c20ca1d3c2",
+      "name": "Prep Single Text",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3460,
+        3080
+      ]
+    },
+    {
+      "parameters": {
+        "prompt": "=You are a tender analyst for a South East Queensland SECURITY (manpower guarding + electronic/CCTV) and COMMERCIAL CLEANING contractor. Read the full tender document below and extract the exact, contract-critical requirements. Where a value is not stated, use \"Not stated\" — never invent.\n\nReturn ONLY a valid JSON object (no markdown, no code fences, no prose):\n{\n  \"compliance_requirements\": \"every licence, certification, clearance, insurance level and registration required\",\n  \"pricing_matrix\": \"the pricing/schedule-of-rates structure — line items, units, GST, escalation clauses\",\n  \"scope_of_work\": \"4-6 sentence precise description of work, sites, hours/roster and deliverables\",\n  \"kpis_slas\": \"performance indicators, response times, reporting obligations\",\n  \"submission_requirements\": \"forms, referees, page limits, lodgement method\",\n  \"evaluation_criteria\": \"assessment criteria and weightings if given\",\n  \"red_flags\": \"incumbent advantage, prequalification, unusual indemnities, tight timeframe\",\n  \"bid_strategy\": \"3-5 sentences of practical advice on positioning a competitive bid\"\n}\n\nTender: {{ $json.title }}\n\nTENDER DOCUMENT:\n{{ $json.doc_text }}"
+      },
+      "id": "87077709-472e-40be-812e-8343a406ca62",
+      "name": "Deep Analysis (Gemini)",
+      "type": "@n8n/n8n-nodes-langchain.chainLlm",
+      "typeVersion": 1,
+      "position": [
+        3840,
+        2980
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "let raw = ($json.text || '').toString().replace(/```json/gi, '').replace(/```/g, '').trim();\nlet a;\ntry { a = JSON.parse(raw); } catch (e) { a = { parse_error: true, scope_of_work: raw.slice(0, 500) }; }\nconst meta = $('Extract Drive File ID').first().json;\nconst cap = new Date().toLocaleString('en-AU', { timeZone: 'Australia/Brisbane' });\nreturn { json: {\n  RowID: meta.RowID || '',\n  Title: meta.Title || '',\n  Analyzed: cap,\n  ComplianceRequirements: a.compliance_requirements || '',\n  PricingMatrix: a.pricing_matrix || '',\n  ScopeOfWork: a.scope_of_work || '',\n  KPIs_SLAs: a.kpis_slas || '',\n  SubmissionRequirements: a.submission_requirements || '',\n  EvaluationCriteria: a.evaluation_criteria || '',\n  RedFlags: a.red_flags || '',\n  BidStrategy: a.bid_strategy || '',\n  Link: meta.Link || ''\n} };"
+      },
+      "id": "1c305a1e-3a26-493f-86d8-105667448b46",
+      "name": "Parse Deep Analysis",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        4160,
+        2980
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "1YrekkkB-YjNAhWA1A-VYMxCcEl8A-UB5d627_zx7fEY",
+          "mode": "list",
+          "cachedResultName": "Tender sheets ",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1YrekkkB-YjNAhWA1A-VYMxCcEl8A-UB5d627_zx7fEY/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 1704151820,
+          "mode": "list",
+          "cachedResultName": "Deep Analysis",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1YrekkkB-YjNAhWA1A-VYMxCcEl8A-UB5d627_zx7fEY/edit#gid=1704151820"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "RowID": "={{ $json.RowID }}",
+            "Title": "={{ $json.Title }}",
+            "Analyzed": "={{ $json.Analyzed }}",
+            "ComplianceRequirements": "={{ $json.ComplianceRequirements }}",
+            "PricingMatrix": "={{ $json.PricingMatrix }}",
+            "ScopeOfWork": "={{ $json.ScopeOfWork }}",
+            "KPIs_SLAs": "={{ $json.KPIs_SLAs }}",
+            "SubmissionRequirements": "={{ $json.SubmissionRequirements }}",
+            "EvaluationCriteria": "={{ $json.EvaluationCriteria }}",
+            "RedFlags": "={{ $json.RedFlags }}",
+            "BidStrategy": "={{ $json.BidStrategy }}",
+            "Link": "={{ $json.Link }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "RowID",
+              "displayName": "RowID",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Title",
+              "displayName": "Title",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Analyzed",
+              "displayName": "Analyzed",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "ComplianceRequirements",
+              "displayName": "ComplianceRequirements",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "PricingMatrix",
+              "displayName": "PricingMatrix",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "ScopeOfWork",
+              "displayName": "ScopeOfWork",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "KPIs_SLAs",
+              "displayName": "KPIs_SLAs",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "SubmissionRequirements",
+              "displayName": "SubmissionRequirements",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "EvaluationCriteria",
+              "displayName": "EvaluationCriteria",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "RedFlags",
+              "displayName": "RedFlags",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "BidStrategy",
+              "displayName": "BidStrategy",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Link",
+              "displayName": "Link",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": true
+        },
+        "options": {}
+      },
+      "id": "00e81269-9e0d-4dd5-86d7-ff77ec8d6344",
+      "name": "Append to Deep Analysis Tab",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.2,
+      "position": [
+        4380,
+        2980
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "MBav801SL7NMz5c8",
+          "name": "Google Sheets account 2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "documentId": {
+          "__rl": true,
+          "value": "1YrekkkB-YjNAhWA1A-VYMxCcEl8A-UB5d627_zx7fEY",
+          "mode": "list",
+          "cachedResultName": "Tender sheets "
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 1020027150,
+          "mode": "list",
+          "cachedResultName": "Claude v3"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "RowID": "={{ $json.RowID }}",
+            "HumanApproval": "Analyzed"
+          },
+          "matchingColumns": [
+            "RowID"
+          ],
+          "schema": [
+            {
+              "id": "RowID",
+              "displayName": "RowID",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "HumanApproval",
+              "displayName": "HumanApproval",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": true
+        },
+        "options": {}
+      },
+      "id": "f379b7d9-4d12-4c45-aaa1-08b8cb994e9b",
+      "name": "Mark Row Analyzed",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.2,
+      "position": [
+        4600,
+        2980
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "MBav801SL7NMz5c8",
+          "name": "Google Sheets account 2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "select": "channel",
+        "channelId": {
+          "__rl": true,
+          "value": "C0B6K8652GM",
+          "mode": "list",
+          "cachedResultName": "hermes-testing"
+        },
+        "text": "=:white_check_mark: *Deep analysis complete: {{ $json.Title }}*\n\nCompliance, pricing structure, scope and bid strategy are in the Deep Analysis tab. Ready for final review.",
+        "otherOptions": {}
+      },
+      "id": "ba36708e-bba2-485a-8aef-e3be072e7ee4",
+      "name": "Slack - Analysis Ready",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.2,
+      "position": [
+        4820,
+        2980
+      ],
+      "webhookId": "34354ee6-7e58-4c27-94b3-d1adf36504d7",
+      "credentials": {
+        "slackApi": {
+          "id": "wBwfpnkQv3zlsz8V",
+          "name": "n8n BOT "
+        }
+      }
+    },
+    {
+      "parameters": {
+        "model": "google/gemini-2.5-flash-lite",
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenRouter",
+      "typeVersion": 1,
+      "position": [
+        3880,
+        3160
+      ],
+      "id": "e2283018-7530-4189-8941-7421368329ab",
+      "name": "OpenRouter Chat Model2",
+      "credentials": {
+        "openRouterApi": {
+          "id": "QhsMW1GW3kISMgNL",
+          "name": "N8N - 11/2/26"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Poll Every 5 Min": {
+      "main": [
+        [
+          {
+            "node": "Read Triage Sheet",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read Triage Sheet": {
+      "main": [
+        [
+          {
+            "node": "Approved + Link Provided",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Approved Awaiting Document",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Approved + Link Provided": {
+      "main": [
+        [
+          {
+            "node": "Extract Drive File ID",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Approved Awaiting Document": {
+      "main": [
+        [
+          {
+            "node": "Slack - Document Needed",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract Drive File ID": {
+      "main": [
+        [
+          {
+            "node": "Download from Drive",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Download from Drive": {
+      "main": [
+        [
+          {
+            "node": "Is Zip?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Is Zip?": {
+      "main": [
+        [
+          {
+            "node": "Unzip Tender Pack",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Extract Single PDF",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Unzip Tender Pack": {
+      "main": [
+        [
+          {
+            "node": "Extract PDF (Summary)",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Extract XLSX (Requirements)",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Extract XLSX (Pricing)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract PDF (Summary)": {
+      "main": [
+        [
+          {
+            "node": "Combine Zip Texts",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract XLSX (Requirements)": {
+      "main": [
+        [
+          {
+            "node": "Combine Zip Texts",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract XLSX (Pricing)": {
+      "main": [
+        [
+          {
+            "node": "Combine Zip Texts",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Combine Zip Texts": {
+      "main": [
+        [
+          {
+            "node": "Deep Analysis (Gemini)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract Single PDF": {
+      "main": [
+        [
+          {
+            "node": "Prep Single Text",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prep Single Text": {
+      "main": [
+        [
+          {
+            "node": "Deep Analysis (Gemini)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Deep Analysis (Gemini)": {
+      "main": [
+        [
+          {
+            "node": "Parse Deep Analysis",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Deep Analysis": {
+      "main": [
+        [
+          {
+            "node": "Append to Deep Analysis Tab",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Append to Deep Analysis Tab": {
+      "main": [
+        [
+          {
+            "node": "Mark Row Analyzed",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Mark Row Analyzed": {
+      "main": [
+        [
+          {
+            "node": "Slack - Analysis Ready",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenRouter Chat Model2": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Deep Analysis (Gemini)",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {},
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "74525d77094878c8cbd9cb45a42b56910d34ea5065046e05f07447a7ea8ef173"
+  }
+}
