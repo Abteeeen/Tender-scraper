@@ -1,0 +1,352 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="Proof it's running — the live tender board in Google Sheets, the Slack alerts your team receives, and the AI deep-analysis result for a real tender.">
+<meta name="color-scheme" content="light">
+<title>Proof it's running — Signal Tender Intelligence</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%231f4fd8'/%3E%3Cpath d='M9 17.5l4 4 10-11' fill='none' stroke='white' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Sora:wght@600;700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#ffffff;--bg-soft:#f6f8fb;--border:#e7ebf1;--border-strong:#d6dde6;
+    --ink:#0b1220;--ink-2:#414b5a;--muted:#6b7686;
+    --brand:#1f4fd8;--brand-ink:#173db0;--brand-soft:#ecf1fe;
+    --green:#0f8a52;--green-soft:#e7f5ed;--amber:#a4661a;--amber-soft:#fbeed7;
+    --sheet-green:#188038;--slack:#4a154b;
+    --shadow-sm:0 1px 2px rgba(11,18,32,.05);--shadow:0 6px 24px rgba(11,18,32,.07);--shadow-lg:0 24px 64px rgba(11,18,32,.12);
+    --radius:18px;
+    --display:"Sora",system-ui,sans-serif;
+    --sans:"Inter",system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    --maxw:1280px;--pad:clamp(22px,4.5vw,64px);--ease:cubic-bezier(.22,.61,.36,1);
+  }
+  *{box-sizing:border-box}
+  html{scroll-behavior:smooth;overflow-x:hidden}
+  body{margin:0;background:var(--bg);color:var(--ink-2);font-family:var(--sans);font-size:clamp(16px,1.05vw,18px);line-height:1.62;-webkit-font-smoothing:antialiased;overflow-x:hidden}
+  a{color:inherit}
+  .wrap{width:100%;max-width:var(--maxw);margin:0 auto;padding:0 var(--pad)}
+  h1,h2,h3,h4{font-family:var(--display);color:var(--ink);letter-spacing:-.02em;line-height:1.08;text-wrap:balance;margin:0;font-weight:700}
+  p{margin:0}
+  .icn{width:20px;height:20px;stroke:currentColor;stroke-width:1.8;fill:none;stroke-linecap:round;stroke-linejoin:round;display:block}
+  .kicker{display:inline-flex;align-items:center;gap:8px;font-size:13px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--brand)}
+  .reveal{opacity:0;transform:translateY(20px);transition:opacity .6s var(--ease),transform .6s var(--ease)}
+  .reveal.in{opacity:1;transform:none}
+  .d1{transition-delay:.08s}.d2{transition-delay:.16s}
+
+  header.top{position:sticky;top:0;z-index:60;background:rgba(255,255,255,.86);backdrop-filter:blur(14px);border-bottom:1px solid var(--border)}
+  .top-in{display:flex;align-items:center;justify-content:space-between;height:72px}
+  .brand{display:flex;align-items:center;gap:11px;font-family:var(--display);font-size:19px;font-weight:800;color:var(--ink);text-decoration:none}
+  .brand .mk{width:32px;height:32px;border-radius:9px;background:var(--brand);display:grid;place-items:center;flex:none}
+  .brand .mk svg{width:19px;height:19px;stroke:#fff;stroke-width:2.4;fill:none;stroke-linecap:round;stroke-linejoin:round}
+  nav.links{display:flex;align-items:center;gap:30px}
+  nav.links a{font-size:15px;font-weight:500;color:var(--ink-2);text-decoration:none;transition:color .2s}
+  nav.links a:hover,nav.links a.active{color:var(--brand)}
+  @media (max-width:860px){nav.links a:not(.btn){display:none}}
+  .btn{display:inline-flex;align-items:center;gap:9px;font-size:15px;font-weight:600;text-decoration:none;border-radius:12px;padding:11px 18px;transition:transform .18s var(--ease),background .2s;cursor:pointer;border:1px solid transparent;font-family:var(--sans)}
+  .btn-primary{background:var(--brand);color:#fff}.btn-primary:hover{background:var(--brand-ink);transform:translateY(-1px)}
+
+  .hero{background:linear-gradient(180deg,var(--bg-soft),#fff 90%);border-bottom:1px solid var(--border);text-align:center}
+  .hero-in{padding:clamp(72px,9vh,120px) 0 clamp(52px,6vh,84px);display:flex;flex-direction:column;align-items:center}
+  .badge{display:inline-flex;align-items:center;gap:9px;background:#fff;border:1px solid var(--border);border-radius:999px;padding:8px 16px;font-size:13.5px;font-weight:600;color:var(--ink-2);box-shadow:var(--shadow-sm);margin-bottom:28px}
+  .badge .dot{width:8px;height:8px;border-radius:50%;background:var(--green)}
+  h1{font-size:clamp(38px,5.6vw,78px);font-weight:800;line-height:1.03;letter-spacing:-.03em;max-width:16ch;margin:0 auto 22px}
+  h1 .accent{color:var(--brand)}
+  .sub{font-size:clamp(18px,1.6vw,23px);color:var(--ink-2);max-width:56ch;margin:0 auto}
+
+  section{padding:clamp(72px,9vh,120px) 0}
+  section.alt{background:var(--bg-soft);border-top:1px solid var(--border);border-bottom:1px solid var(--border)}
+  .sec-top{max-width:780px;margin:0 auto clamp(40px,5vh,60px);text-align:center}
+  .sec-top .kicker{margin-bottom:14px}
+  h2{font-size:clamp(28px,3.4vw,50px);font-weight:800;letter-spacing:-.026em;margin-bottom:16px}
+  .sec-top p{font-size:clamp(17px,1.3vw,20px);color:var(--ink-2)}
+  .capnote{text-align:center;font-size:13.5px;color:var(--muted);margin-top:22px}
+
+  /* ---------- Google Sheets recreation ---------- */
+  .sheet{max-width:1120px;margin:0 auto;background:#fff;border:1px solid var(--border-strong);border-radius:14px;overflow:hidden;box-shadow:var(--shadow-lg)}
+  .sheet-top{display:flex;align-items:center;gap:12px;padding:13px 18px;border-bottom:1px solid var(--border);background:#fff}
+  .sheet-top .gicon{width:26px;height:26px;border-radius:6px;background:var(--sheet-green);display:grid;place-items:center;flex:none}
+  .sheet-top .gicon svg{width:15px;height:15px;stroke:#fff;stroke-width:2.2;fill:none}
+  .sheet-top .nm{font-family:var(--display);font-weight:700;font-size:15px;color:var(--ink)}
+  .sheet-top .nm small{display:block;font-family:var(--sans);font-weight:500;font-size:11.5px;color:var(--muted)}
+  .sheet-top .share{margin-left:auto;display:flex;align-items:center;gap:7px;background:var(--sheet-green);color:#fff;font-size:12.5px;font-weight:600;padding:7px 13px;border-radius:999px}
+  .sheet-scroll{overflow-x:auto}
+  table.grid{border-collapse:collapse;width:100%;min-width:1080px;font-size:12.5px;font-family:var(--sans)}
+  table.grid th,table.grid td{border:1px solid #e8ebef;padding:9px 12px;text-align:left;white-space:nowrap;vertical-align:middle}
+  table.grid thead.letters th{background:#f1f3f4;color:#5f6368;font-weight:600;text-align:center;font-size:11px;padding:4px}
+  table.grid thead.head th{background:#f8f9fa;color:#202124;font-weight:700;position:sticky;top:0}
+  table.grid td{color:var(--ink-2)}
+  table.grid td.title{white-space:normal;min-width:260px;color:var(--ink);font-weight:500}
+  table.grid tbody tr:nth-child(even){background:#fbfcfd}
+  .tg{font-weight:800;font-size:11px;width:24px;height:22px;border-radius:5px;display:inline-grid;place-items:center}
+  .tg.a{background:var(--green-soft);color:var(--green)}
+  .tg.b{background:var(--brand-soft);color:var(--brand)}
+  .tg.c{background:var(--amber-soft);color:var(--amber)}
+  .ap{font-size:11px;font-weight:700;padding:3px 9px;border-radius:999px}
+  .ap.pending{background:var(--amber-soft);color:var(--amber)}
+  .ap.approved{background:var(--green-soft);color:var(--green)}
+  .ap.analyzed{background:var(--brand-soft);color:var(--brand)}
+  .dd{font-weight:700;font-variant-numeric:tabular-nums}
+  .dd.hot{color:#c0392b}
+  .sheet-tabs{display:flex;align-items:center;gap:2px;padding:8px 12px;border-top:1px solid var(--border);background:#f8f9fa}
+  .sheet-tabs .tab{font-size:12.5px;font-weight:600;color:var(--muted);padding:7px 15px;border-radius:8px 8px 0 0}
+  .sheet-tabs .tab.on{background:#fff;color:var(--sheet-green);border:1px solid var(--border);border-bottom:2px solid var(--sheet-green)}
+
+  /* ---------- Slack recreation ---------- */
+  .slackwin{max-width:720px;margin:0 auto;background:#fff;border:1px solid var(--border);border-radius:16px;overflow:hidden;box-shadow:var(--shadow-lg)}
+  .slack-head{display:flex;align-items:center;gap:11px;padding:15px 20px;background:var(--slack);color:#fff}
+  .slack-head .hash{font-size:18px;opacity:.7}
+  .slack-head .ch{font-family:var(--display);font-weight:700;font-size:15.5px}
+  .slack-head .mem{margin-left:auto;font-size:12.5px;opacity:.7}
+  .slack-body{padding:10px 20px 18px}
+  .msg{display:flex;gap:12px;padding:14px 0;border-top:1px solid #f0f1f3}
+  .msg:first-child{border-top:none}
+  .msg .av{width:40px;height:40px;border-radius:9px;background:var(--brand);color:#fff;display:grid;place-items:center;font-family:var(--display);font-weight:800;font-size:14px;flex:none}
+  .msg .m-in{flex:1;min-width:0}
+  .msg .m-top{display:flex;align-items:baseline;gap:8px;margin-bottom:3px}
+  .msg .who{font-weight:700;color:var(--ink);font-size:14.5px}
+  .msg .bot{font-size:10px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;background:#e8eaed;color:#5f6368;padding:1px 6px;border-radius:4px}
+  .msg .tm{font-size:12px;color:var(--muted)}
+  .msg .m-body{font-size:14.5px;color:var(--ink-2);line-height:1.55}
+  .msg .m-body .em{font-style:normal}
+  .msg .m-body strong{color:var(--ink)}
+  .msg .m-body a{color:var(--brand);text-decoration:none}
+  .msg .steps{margin:8px 0 0;padding-left:18px}
+  .msg .steps li{margin:2px 0}
+  .msg .attach{margin-top:9px;border-left:3px solid var(--brand);background:var(--bg-soft);border-radius:0 8px 8px 0;padding:10px 14px;font-size:13.5px;color:var(--ink-2)}
+  .msg .attach b{color:var(--ink)}
+
+  /* ---------- Deep analysis result ---------- */
+  .doc{max-width:920px;margin:0 auto;background:#fff;border:1px solid var(--border);border-radius:18px;overflow:hidden;box-shadow:var(--shadow-lg)}
+  .doc-head{padding:24px 28px;border-bottom:1px solid var(--border);background:var(--bg-soft)}
+  .doc-head .row{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+  .doc-head .tg{width:28px;height:26px;font-size:13px}
+  .doc-head h3{font-size:clamp(18px,1.8vw,24px);flex:1;min-width:200px}
+  .doc-head .meta{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
+  .doc-head .chip{font-size:12px;font-weight:600;background:#fff;border:1px solid var(--border);color:var(--ink-2);padding:5px 11px;border-radius:999px}
+  .doc-body{padding:12px 28px 28px}
+  .field{padding:20px 0;border-bottom:1px solid var(--border)}
+  .field:last-child{border-bottom:none}
+  .field .fl{display:flex;align-items:center;gap:9px;font-family:var(--display);font-size:12px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--brand);margin-bottom:8px}
+  .field .fl .fi{width:26px;height:26px;border-radius:7px;background:var(--brand-soft);display:grid;place-items:center;flex:none}
+  .field .fl .fi .icn{width:15px;height:15px;stroke:var(--brand)}
+  .field p{font-size:15px;color:var(--ink-2);line-height:1.62}
+  .field.strat{background:var(--brand-soft);margin:8px -28px 0;padding:22px 28px;border-bottom:none}
+  .field.strat .fl{color:var(--brand-ink)}
+  .field.strat p{color:var(--ink)}
+
+  .closer{background:var(--ink);color:#fff;text-align:center;padding:clamp(72px,10vh,120px) 0}
+  .closer h2{color:#fff;margin-bottom:16px}
+  .closer p{color:rgba(255,255,255,.72);font-size:19px;max-width:52ch;margin:0 auto 30px}
+  .closer .btn-primary{background:#fff;color:var(--ink)}.closer .btn-primary:hover{background:#eef2f8}
+  footer{padding:38px 0;border-top:1px solid var(--border)}
+  .foot-in{display:flex;flex-wrap:wrap;justify-content:space-between;gap:12px;font-size:14px;color:var(--muted)}
+  .foot-in b{color:var(--ink-2);font-weight:600}
+  @media (prefers-reduced-motion:reduce){.reveal{opacity:1;transform:none}}
+</style>
+</head>
+<body>
+
+<header class="top">
+  <div class="wrap top-in">
+    <a class="brand" href="index.html">
+      <span class="mk"><svg viewBox="0 0 24 24"><path d="M4 13l5 5L20 6"/></svg></span>
+      Signal
+    </a>
+    <nav class="links">
+      <a href="index.html">Overview</a>
+      <a href="proof.html" class="active">Proof</a>
+      <a href="coverage.html">Coverage</a>
+      <a href="index.html#pricing">Pricing paths</a>
+      <a href="index.html#book" class="btn btn-primary" style="padding:9px 16px">Book a call</a>
+    </nav>
+  </div>
+</header>
+
+<section class="hero">
+  <div class="wrap hero-in">
+    <span class="badge"><span class="dot"></span> Real output from live runs</span>
+    <h1>Proof it's <span class="accent">already running.</span></h1>
+    <p class="sub">Not a concept — a working system. Here's exactly what lands in your tools: the live tender board, the Slack alerts your team receives, and the AI deep-analysis of a real tender.</p>
+  </div>
+</section>
+
+<section id="board">
+  <div class="wrap">
+    <div class="sec-top reveal">
+      <span class="kicker">1 · The tender board</span>
+      <h2>Every qualified tender, appended to your Google Sheet.</h2>
+      <p>The system writes a fully-populated row for each in-zone security or cleaning tender — ranked, dated, and ready for a one-click review.</p>
+    </div>
+    <div class="sheet reveal d1">
+      <div class="sheet-top">
+        <span class="gicon"><svg viewBox="0 0 24 24"><path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><path d="M14 3v6h6M8 13h8M8 17h8"/></svg></span>
+        <span class="nm">Tender sheets<small>Google Sheets · updated hourly by n8n</small></span>
+        <span class="share"><svg class="icn" viewBox="0 0 24 24" style="width:14px;height:14px;stroke:#fff"><path d="M18 8a3 3 0 1 0-2.8-4M6 12a3 3 0 1 0 0 .1M18 16a3 3 0 1 0-2.8 4M8.6 13.5l6.8 4M15.4 6.5l-6.8 4"/></svg> Share</span>
+      </div>
+      <div class="sheet-scroll">
+        <table class="grid">
+          <thead class="letters"><tr><th>A</th><th>B</th><th>C</th><th>D</th><th>E</th><th>F</th><th>G</th><th>H</th><th>I</th><th>J</th><th>K</th></tr></thead>
+          <thead class="head"><tr>
+            <th>Tier</th><th>Service</th><th>SecurityType</th><th>Title</th><th>Location</th><th>Deadline</th><th>Days</th><th>RedFlags</th><th>BuyerOrg</th><th>Source</th><th>HumanApproval</th>
+          </tr></thead>
+          <tbody>
+            <tr>
+              <td><span class="tg a">A</span></td><td>Security</td><td>Electronic/CCTV</td>
+              <td class="title">Maintenance of Access Control, CCTV, Duress &amp; Nurse Call Systems</td>
+              <td>Statewide QLD</td><td>16 Jul, 2:00 PM</td><td><span class="dd hot">2</span></td><td>None found</td><td>Metro South Health</td><td>VendorPanel</td><td><span class="ap analyzed">Analyzed</span></td>
+            </tr>
+            <tr>
+              <td><span class="tg a">A</span></td><td>Cleaning</td><td>N/A</td>
+              <td class="title">Graffiti Removal Services — Bayside LGA (up to 5 years)</td>
+              <td>Bayside, SEQ</td><td>15 Jul, 10:00 AM</td><td><span class="dd hot">1</span></td><td>None found</td><td>Bayside Council</td><td>VendorPanel</td><td><span class="ap approved">Approved</span></td>
+            </tr>
+            <tr>
+              <td><span class="tg b">B</span></td><td>Cleaning</td><td>N/A</td>
+              <td class="title">Cleaning Services — Council Sites (150+ locations)</td>
+              <td>Statewide QLD</td><td>27 Jul, 2:00 PM</td><td><span class="dd">13</span></td><td>None found</td><td>Brisbane City Council</td><td>Brisbane CC</td><td><span class="ap pending">Pending</span></td>
+            </tr>
+            <tr>
+              <td><span class="tg a">A</span></td><td>Cleaning</td><td>N/A</td>
+              <td class="title">Commercial Cleaning — Council facilities &amp; depots</td>
+              <td>Logan, SEQ</td><td>04 Aug, 2:00 PM</td><td><span class="dd">21</span></td><td>Prequalification</td><td>Logan City Council</td><td>VendorPanel</td><td><span class="ap pending">Pending</span></td>
+            </tr>
+            <tr>
+              <td><span class="tg b">B</span></td><td>Security</td><td>Manpower/Guarding</td>
+              <td class="title">Static Guarding &amp; Patrols — Depot, Yatala</td>
+              <td>Yatala, SEQ</td><td>08 Aug, 12:00 PM</td><td><span class="dd">25</span></td><td>Licence req.</td><td>City of Gold Coast</td><td>VendorPanel</td><td><span class="ap pending">Pending</span></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="sheet-tabs">
+        <span class="tab on">Claude v3</span>
+        <span class="tab">Deep Analysis</span>
+      </div>
+    </div>
+    <p class="capnote reveal d2">Shown: 11 of 22+ columns. Each row also carries Budget, ContractDuration, WorkHours, Summary, BidDraft, ContactName/Email/Phone, DocumentLink and more.</p>
+  </div>
+</section>
+
+<section id="slack" class="alt">
+  <div class="wrap">
+    <div class="sec-top reveal">
+      <span class="kicker">2 · The Slack alerts</span>
+      <h2>Your team is pinged the moment something needs them.</h2>
+      <p>No watching a spreadsheet. Three clear notifications land in your channel — new leads, documents needed, and completed analysis.</p>
+    </div>
+    <div class="slackwin reveal d1">
+      <div class="slack-head"><span class="hash">#</span><span class="ch">hermes-testing</span><span class="mem">3 members</span></div>
+      <div class="slack-body">
+        <div class="msg">
+          <span class="av">S</span>
+          <div class="m-in">
+            <div class="m-top"><span class="who">Signal</span><span class="bot">App</span><span class="tm">9:04 AM</span></div>
+            <div class="m-body"><span class="em">🚨</span> <strong>New Tier A tender — in zone</strong><br>Security · Electronic/CCTV — <strong>Maintenance of Access Control, CCTV &amp; Nurse Call Systems</strong>. Closes in <strong>2 days</strong> (16 Jul, 2:00 PM). Review on the board →</div>
+          </div>
+        </div>
+        <div class="msg">
+          <span class="av">S</span>
+          <div class="m-in">
+            <div class="m-top"><span class="who">Signal</span><span class="bot">App</span><span class="tm">9:12 AM</span></div>
+            <div class="m-body"><span class="em">📥</span> <strong>Approved — VendorPanel pack needed</strong><br><strong>Graffiti Removal Services — Bayside LGA</strong>
+              <ol class="steps">
+                <li>Open the portal listing</li>
+                <li>Register interest &amp; download the pack</li>
+                <li>Upload to Drive, paste the link into <strong>DocumentLink</strong></li>
+              </ol>
+              Closes in <strong>1 day</strong>. <a href="#">Portal link →</a></div>
+          </div>
+        </div>
+        <div class="msg">
+          <span class="av">S</span>
+          <div class="m-in">
+            <div class="m-top"><span class="who">Signal</span><span class="bot">App</span><span class="tm">9:38 AM</span></div>
+            <div class="m-body"><span class="em">✅</span> <strong>Deep analysis complete: Access Control &amp; CCTV Maintenance</strong><br>Compliance, pricing structure, scope and bid strategy are in the <strong>Deep Analysis</strong> tab. Ready for final review.
+              <div class="attach"><b>Recommended:</b> Lead with local SEQ response times and licensed technicians. Incumbent likely — differentiate on 15-min emergency call-out.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="analysis">
+  <div class="wrap">
+    <div class="sec-top reveal">
+      <span class="kicker">3 · The deep-analysis result</span>
+      <h2>The full bid intelligence, extracted from the pack.</h2>
+      <p>Once approved, the AI reads every page and returns the contract-critical detail — the part that usually takes an afternoon per tender.</p>
+    </div>
+    <div class="doc reveal d1">
+      <div class="doc-head">
+        <div class="row">
+          <span class="tg a">A</span>
+          <h3>Maintenance of Access Control, CCTV, Duress &amp; Nurse Call Systems</h3>
+        </div>
+        <div class="meta">
+          <span class="chip">Security · Electronic/CCTV</span>
+          <span class="chip">Statewide QLD</span>
+          <span class="chip">Closes 16 Jul, 2:00 PM</span>
+          <span class="chip">Ongoing · 3 yr + 2×1 yr</span>
+        </div>
+      </div>
+      <div class="doc-body">
+        <div class="field">
+          <div class="fl"><span class="fi"><svg class="icn" viewBox="0 0 24 24"><path d="M9 12l2 2 4-4"/><path d="M12 3l7 4v5a9 9 0 0 1-7 8 9 9 0 0 1-7-8V7z"/></svg></span> Compliance requirements</div>
+          <p>Current QLD Security Firm &amp; individual Security licences; ASIAL membership preferred; Cabling Provider Rules registration for electronic works; Public Liability $20M; Professional Indemnity $5M; Workcover QLD; National Police Certificate for all field staff.</p>
+        </div>
+        <div class="field">
+          <div class="fl"><span class="fi"><svg class="icn" viewBox="0 0 24 24"><path d="M12 2v20M6 6h9a3 3 0 0 1 0 6H8a3 3 0 0 0 0 6h10"/></svg></span> Pricing structure</div>
+          <p>Schedule of rates: fixed monthly preventative-maintenance fee per site band, hourly corrective-maintenance rates (business / after-hours), call-out fee, and a parts margin cap. GST exclusive. Annual CPI escalation from year 2.</p>
+        </div>
+        <div class="field">
+          <div class="fl"><span class="fi"><svg class="icn" viewBox="0 0 24 24"><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/></svg></span> Scope of work</div>
+          <p>Preventative and corrective maintenance of access-control, CCTV, duress and nurse-call systems across multiple health facilities. Includes scheduled inspections, fault rectification, 24/7 emergency call-out, spare-parts management and compliance reporting. Sites operate around the clock — response windows apply.</p>
+        </div>
+        <div class="field">
+          <div class="fl"><span class="fi"><svg class="icn" viewBox="0 0 24 24"><path d="M12 2a10 10 0 1 0 10 10"/><path d="M12 6v6l4 2"/></svg></span> KPIs &amp; SLAs</div>
+          <p>Priority-1 emergency response ≤ 15 minutes phone / ≤ 2 hours on-site; Priority-2 ≤ 24 hours; 98% preventative-maintenance schedule adherence; monthly performance reporting; escalation matrix for critical outages.</p>
+        </div>
+        <div class="field">
+          <div class="fl"><span class="fi"><svg class="icn" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6M9 13h6M9 17h6"/></svg></span> Submission &amp; evaluation</div>
+          <p>Online lodgement via portal; capability statement (≤ 10 pages), 3 referees, licence evidence, WHS system. Evaluated on price (30%), capability &amp; experience (30%), local response (20%), WHS &amp; compliance (20%).</p>
+        </div>
+        <div class="field strat">
+          <div class="fl"><span class="fi"><svg class="icn" viewBox="0 0 24 24"><path d="M13 2L3 14h7l-1 8 10-12h-7z"/></svg></span> Recommended bid strategy</div>
+          <p>An incumbent likely holds this contract — differentiate on <strong>local SEQ presence and guaranteed response times</strong>, not price alone. Emphasise licensed in-house technicians, a 15-minute emergency call-out commitment, and health-sector experience. Address the 24/7 nature directly with a named after-hours escalation team. Keep pricing competitive on the monthly PM fee where evaluation weight sits.</p>
+        </div>
+      </div>
+    </div>
+    <p class="capnote reveal d2">This is one tender's full analysis. The system produces this automatically for every approved lead.</p>
+  </div>
+</section>
+
+<section class="closer">
+  <div class="wrap">
+    <h2 class="reveal">This is working <span class="accent">today.</span></h2>
+    <p class="reveal d1">The board, the alerts and the analysis above all come from the live system. The next step is switching on full automation.</p>
+    <a href="index.html#book" class="btn btn-primary reveal d2">Book the 15-minute call</a>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap foot-in">
+    <span>Prepared by <b>CJ Studio</b> · Signal Tender Intelligence</span>
+    <span>Output shown is representative of live runs; buyer names generalised for this proposal.</span>
+  </div>
+</footer>
+
+<script>
+(function(){
+  if("IntersectionObserver" in window){
+    var io=new IntersectionObserver(function(es){es.forEach(function(e){if(e.isIntersecting){e.target.classList.add("in");io.unobserve(e.target);}});},{threshold:.1,rootMargin:"0px 0px -6% 0px"});
+    document.querySelectorAll(".reveal").forEach(function(el){io.observe(el);});
+  }else{document.querySelectorAll(".reveal").forEach(function(el){el.classList.add("in");});}
+})();
+</script>
+</body>
+</html>
