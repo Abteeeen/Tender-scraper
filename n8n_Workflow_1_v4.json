@@ -1,0 +1,1879 @@
+{
+  "name": "Tender Radar — Discovery & Triage (v4)",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "hours"
+            }
+          ]
+        }
+      },
+      "id": "n-0001-4a10-9a10-tenderradar",
+      "name": "Schedule Trigger",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1,
+      "position": [
+        -560,
+        900
+      ]
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "1YrekkkB-YjNAhWA1A-VYMxCcEl8A-UB5d627_zx7fEY",
+          "mode": "list",
+          "cachedResultName": "Tender sheets "
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 1020027150,
+          "mode": "list",
+          "cachedResultName": "Claude v3"
+        },
+        "options": {}
+      },
+      "id": "n-0002-4a10-9a10-tenderradar",
+      "name": "Read Existing RowIDs",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.2,
+      "position": [
+        -340,
+        900
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "HLZxRgOR9Y2XBrnV",
+          "name": "Sheets permission(14/07/2026)"
+        }
+      },
+      "alwaysOutputData": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "// One item carrying every RowID already in the triage sheet.\n// Fanning out from a single item keeps each source fetch running once.\nconst seen = new Set();\nfor (const r of $input.all()) {\n  const id = (r.json.RowID || '').toString().trim();\n  if (id) seen.add(id);\n}\nreturn [{ json: { seen: Array.from(seen), seenCount: seen.size, runAt: new Date().toISOString() } }];"
+      },
+      "id": "n-0003-4a10-9a10-tenderradar",
+      "name": "Collect Seen IDs",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -120,
+        900
+      ]
+    },
+    {
+      "parameters": {
+        "url": "https://www.tenders.gov.au/public_data/rss/rss.xml",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "User-Agent",
+              "value": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "n-0004-4a10-9a10-tenderradar",
+      "name": "Fetch AusTender RSS",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [
+        140,
+        260
+      ],
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "id": "n-0005-4a10-9a10-tenderradar",
+      "name": "Convert XML (AT)",
+      "type": "n8n-nodes-base.xml",
+      "typeVersion": 1,
+      "position": [
+        340,
+        260
+      ]
+    },
+    {
+      "parameters": {
+        "fieldToSplitOut": "rss.channel.item",
+        "options": {}
+      },
+      "id": "n-0006-4a10-9a10-tenderradar",
+      "name": "Split (AT)",
+      "type": "n8n-nodes-base.itemLists",
+      "typeVersion": 3,
+      "position": [
+        540,
+        260
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "return $input.all().map((it) => {\n  const j = it.json;\n  const g = j.guid;\n  const guid = (g && typeof g === 'object') ? (g['#text'] || g._ || j.link) : (g || j.link);\n  const title = (j.title || '').toString();\n  const desc = (typeof j.description === 'string' ? j.description : '').toString();\n  return { json: {\n    title, link: j.link || '', guid,\n    posted_raw: j.pubDate || '',\n    source: 'AusTender',\n    text: (title + ' \\u2014 ' + desc),\n    search_blob: (title + ' ' + desc).toLowerCase()\n  }};\n});"
+      },
+      "id": "n-0007-4a10-9a10-tenderradar",
+      "name": "Normalize (AusTender)",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        740,
+        260
+      ]
+    },
+    {
+      "parameters": {
+        "url": "https://www.vendorpanel.com.au/PublicTendersRssV2.aspx?mode=all",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "User-Agent",
+              "value": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "n-0008-4a10-9a10-tenderradar",
+      "name": "Fetch VendorPanel RSS",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [
+        140,
+        500
+      ],
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "id": "n-0009-4a10-9a10-tenderradar",
+      "name": "Convert XML (VP)",
+      "type": "n8n-nodes-base.xml",
+      "typeVersion": 1,
+      "position": [
+        340,
+        500
+      ]
+    },
+    {
+      "parameters": {
+        "fieldToSplitOut": "rss.channel.item",
+        "options": {}
+      },
+      "id": "n-0010-4a10-9a10-tenderradar",
+      "name": "Split (VP)",
+      "type": "n8n-nodes-base.itemLists",
+      "typeVersion": 3,
+      "position": [
+        540,
+        500
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "return $input.all().map((it) => {\n  const j = it.json;\n  const raw = (typeof j.description === 'string' ? j.description : JSON.stringify(j.description || '')).toString();\n  const clean = raw.replace(/<[^>]+>/g, ' ').replace(/&nbsp;/gi, ' ').replace(/&amp;/gi, '&').replace(/\\s+/g, ' ').trim();\n  const title = (j.title || '').toString();\n  const g = j.guid;\n  const guid = (g && typeof g === 'object') ? (g['#text'] || g._ || j.link) : (g || j.link);\n  return { json: {\n    title, link: j.link || '', guid,\n    posted_raw: j.pubDate || '',\n    source: 'VendorPanel',\n    text: (title + ' \\u2014 ' + clean),\n    search_blob: (title + ' ' + clean).toLowerCase()\n  }};\n});"
+      },
+      "id": "n-0011-4a10-9a10-tenderradar",
+      "name": "Normalize (VendorPanel)",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        740,
+        500
+      ]
+    },
+    {
+      "parameters": {
+        "url": "https://www.brisbane.qld.gov.au/business/council-tenders-and-market-led-proposals/current-tenders",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "User-Agent",
+              "value": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "n-0012-4a10-9a10-tenderradar",
+      "name": "Fetch Brisbane CC",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [
+        140,
+        740
+      ],
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "operation": "extractHtmlContent",
+        "extractionValues": {
+          "values": [
+            {
+              "key": "rows",
+              "cssSelector": "table tr",
+              "returnValue": "html",
+              "returnArray": true
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "n-0013-4a10-9a10-tenderradar",
+      "name": "Extract BCC Rows",
+      "type": "n8n-nodes-base.html",
+      "typeVersion": 1,
+      "position": [
+        340,
+        740
+      ]
+    },
+    {
+      "parameters": {
+        "fieldToSplitOut": "rows",
+        "options": {}
+      },
+      "id": "n-0014-4a10-9a10-tenderradar",
+      "name": "Split BCC Rows",
+      "type": "n8n-nodes-base.itemLists",
+      "typeVersion": 3,
+      "position": [
+        540,
+        740
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Brisbane City Council publishes TWO mirrored tables (one without links) and\n// TWO lists: open tenders (\"Close date\") and a forward schedule (\"Release date\").\n// Keep the linked copy of each, and tag which list it came from.\nconst BASE = 'https://www.brisbane.qld.gov.au';\nconst LANDING = BASE + '/business/council-tenders-and-market-led-proposals/current-tenders';\n\nconst rows = [];\nfor (const it of $input.all()) {\n  const html = (it.json.rows || '').toString();\n  const a = html.match(/<a[^>]*href=[\"']([^\"']+)[\"'][^>]*>([\\s\\S]*?)<\\/a>/i);\n  const href = a ? a[1] : '';\n  let title = a ? a[2].replace(/<[^>]+>/g, ' ').replace(/&nbsp;/gi, ' ').replace(/&amp;/gi, '&').replace(/\\s+/g, ' ').trim() : '';\n  const rowText = html.replace(/<[^>]+>/g, ' ').replace(/&nbsp;/gi, ' ').replace(/&amp;/gi, '&').replace(/\\s+/g, ' ').trim();\n  if (rowText.length < 20) continue;\n  if (/^(title and description|tender|closing|status|reference|number)\\b/i.test(rowText)) continue;\n\n  const isMailto = /mailto:/i.test(href);\n  let link = LANDING;\n  if (href && !isMailto) link = /^https?:/i.test(href) ? href : BASE + (href.startsWith('/') ? '' : '/') + href;\n\n  if (!title || /^email contact$/i.test(title) || /^https?:/i.test(title)) {\n    title = rowText.split(/\\s+(?:Council is seeking|RFx)/i)[0].slice(0, 140).trim() || rowText.slice(0, 140);\n  }\n\n  const upcoming = /release date/i.test(rowText) && !/close date/i.test(rowText);\n  const closed = /\\bclosed\\b\\s*$/i.test(rowText);\n  const ref = (rowText.match(/\\b(Doc\\d+|CW\\d+|CON\\d+|CN\\d+|TEN\\d+)\\b/i) || [])[0] || '';\n\n  rows.push({\n    key: (ref || title.slice(0, 80)).toLowerCase(),\n    hasLink: !!(href && isMailto) || (!!href && !isMailto),\n    ariba: isMailto ? href.replace(/^[^]*?mailto:/i, 'mailto:') : '',\n    json: {\n      title, link, guid: 'BCC:' + (ref || title.slice(0, 90)),\n      posted_raw: '', source: 'Brisbane City Council',\n      ref, text: rowText, search_blob: rowText.toLowerCase(),\n      _bcc_upcoming: upcoming, _bcc_closed: closed,\n      ariba_request: isMailto ? href.replace(/^[^]*?mailto:/i, 'mailto:') : ''\n    }\n  });\n}\n\n// collapse the mirrored tables, preferring the copy that carries the Ariba link\nconst best = new Map();\nfor (const r of rows) {\n  const prev = best.get(r.key);\n  if (!prev || (!prev.hasLink && r.hasLink)) best.set(r.key, r);\n}\nreturn Array.from(best.values()).filter((r) => !r.json._bcc_closed).map((r) => ({ json: r.json }));"
+      },
+      "id": "n-0015-4a10-9a10-tenderradar",
+      "name": "Normalize (BCC)",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        740,
+        740
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": false,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "up",
+              "leftValue": "={{ $json._bcc_upcoming }}",
+              "rightValue": "true",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "n-0016-4a10-9a10-tenderradar",
+      "name": "BCC Open or Upcoming?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        940,
+        740
+      ]
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "1YrekkkB-YjNAhWA1A-VYMxCcEl8A-UB5d627_zx7fEY",
+          "mode": "list",
+          "cachedResultName": "Tender sheets "
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Watchlist",
+          "mode": "name",
+          "cachedResultName": "Watchlist"
+        },
+        "options": {}
+      },
+      "id": "n-0017-4a10-9a10-tenderradar",
+      "name": "Read Watchlist",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.2,
+      "position": [
+        140,
+        980
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "HLZxRgOR9Y2XBrnV",
+          "name": "Sheets permission(14/07/2026)"
+        }
+      },
+      "disabled": true,
+      "alwaysOutputData": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Sheet-driven watchlist: one row per site (SiteName | URL | Selector).\n// Adding a new council or university is a spreadsheet row, not a new node.\nconst KW = ['security','cleaning','cleaner','guard','patrol','janitor','custodial','concierge','cctv','surveillance','housekeeping'];\nconst out = [];\nfor (const row of $input.all()) {\n  const site = (row.json.SiteName || 'Watchlist').toString().trim();\n  const url = (row.json.URL || '').toString().trim();\n  if (!url || !/^https?:/i.test(url)) continue;\n  let html = '';\n  try {\n    const res = await this.helpers.httpRequest({ url, headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' }, timeout: 25000 });\n    html = (typeof res === 'string') ? res : JSON.stringify(res);\n  } catch (e) { continue; }\n  const om = url.match(/^https?:\\/\\/[^/]+/);\n  const origin = om ? om[0] : '';\n  const re = /<a[^>]*href=[\"']([^\"'#]+)[\"'][^>]*>([\\s\\S]*?)<\\/a>/gi;\n  let m; const seen = new Set();\n  while ((m = re.exec(html)) !== null) {\n    let link = m[1];\n    const title = m[2].replace(/<[^>]+>/g, ' ').replace(/&nbsp;/gi, ' ').replace(/&amp;/gi, '&').replace(/\\s+/g, ' ').trim();\n    if (title.length < 15) continue;\n    const blob = title.toLowerCase();\n    if (!KW.some((k) => blob.includes(k))) continue;\n    if (link.startsWith('/')) link = origin + link;\n    if (!/^https?:/i.test(link)) continue;\n    if (seen.has(link)) continue;\n    seen.add(link);\n    out.push({ json: { title, link, guid: 'WL:' + link, posted_raw: '', source: site, text: title, search_blob: blob } });\n  }\n}\nreturn out;"
+      },
+      "id": "n-0018-4a10-9a10-tenderradar",
+      "name": "Scrape Watchlist",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        420,
+        980
+      ]
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "tender-robot",
+        "options": {}
+      },
+      "id": "n-0019-4a10-9a10-tenderradar",
+      "name": "Robot Push (Webhook)",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        140,
+        1200
+      ],
+      "webhookId": "a7c1e5d2-robot-push-tender-radar"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Items pushed in by the Apify / Playwright robot (or any external fetcher).\n// Expected shape: title, link, guid, source, text.\nconst body = $input.first().json;\nconst arr = Array.isArray(body) ? body : (Array.isArray(body.body) ? body.body : [body]);\nreturn arr.filter(Boolean).map((j) => {\n  const title = (j.title || '').toString();\n  const text = (j.text || title).toString();\n  return { json: {\n    title, link: j.link || '', guid: j.guid || ('PUSH:' + (j.link || title)),\n    posted_raw: j.posted_raw || '', source: j.source || 'Robot',\n    text, search_blob: (j.search_blob || (title + ' ' + text)).toLowerCase()\n  }};\n});"
+      },
+      "id": "n-0020-4a10-9a10-tenderradar",
+      "name": "Normalize (Robot)",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        420,
+        1200
+      ]
+    },
+    {
+      "parameters": {
+        "format": "simple",
+        "options": {}
+      },
+      "id": "n-0021-4a10-9a10-tenderradar",
+      "name": "Tender Inbox (IMAP)",
+      "type": "n8n-nodes-base.emailReadImap",
+      "typeVersion": 2,
+      "position": [
+        140,
+        1420
+      ],
+      "disabled": true,
+      "notes": "Set an IMAP credential for the dedicated tenders@ mailbox, then enable."
+    },
+    {
+      "parameters": {
+        "jsCode": "return $input.all().map((it) => {\n  const j = it.json;\n  const subject = (j.subject || '').toString();\n  const body = (j.textPlain || j.textHtml || j.text || '').toString().replace(/<[^>]+>/g, ' ').replace(/\\s+/g, ' ').trim();\n  const linkM = body.match(/https?:\\/\\/[^\\s\"'<>]+/);\n  return { json: {\n    title: subject,\n    link: linkM ? linkM[0] : '',\n    guid: 'MAIL:' + (j.messageId || subject).toString().slice(0, 120),\n    posted_raw: j.date || '',\n    source: 'Tender Inbox',\n    text: (subject + ' \\u2014 ' + body).slice(0, 6000),\n    search_blob: (subject + ' ' + body).toLowerCase()\n  }};\n});"
+      },
+      "id": "n-0022-4a10-9a10-tenderradar",
+      "name": "Normalize (Email)",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        420,
+        1420
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// === RELEVANCE CLASSIFIER (all sources) ===\n// Tags every item _keep / _drop_reason. Nothing is discarded here so the\n// rejection log can record what we dropped and why.\nconst NEG = /\\b(biosecurity|cyber ?security|information security|info security|it security|data security|food security|national security|network security)\\b/i;\n\nconst STRONG = /\\b(cleaning|cleaner|janitor|janitorial|housekeeping|custodial|hygiene services|guard|guarding|security guard|security service|security officer|manned guarding|static guard|crowd control|mobile patrol|patrol|concierge|cctv|surveillance|access control|alarm response|alarm monitoring|loss prevention|gatehouse)\\b/i;\n\nconst CLEAN_BAD = /\\b(hull|street sweep|drain|pipe|duct|tank|dry clean|desludg)\\b/i;\nconst FACIL = /\\bfacilit(?:y|ies) (?:management|manager|cleaning|maintenance|services)\\b/i;\nconst CAT_GOOD = /(security services|cleaning services|security & monitoring|building cleaning)/i;\n\nconst OTHER = /\\b(construction|demolition|demolish|refurbish\\w*|redevelopment|design and construct|design & construct|building works|amenities building|change ?room|swimming pool|aquatic centre|landfill|kerbside|waste collection|recycl\\w+|pavement|road upgrade|intersection|switchboard|hvac|air ?condition\\w*|solar|lift (replacement|maintenance)|childcare|long day care|graphic design|physiotherapy|aquaponics|tree pruning|weed spraying|planning scheme|irrigation|generator maintenance)\\b/i;\n\nconst catText = (t) => { const m = (t || '').toLowerCase().match(/tender categories\\s*:\\s*([^]*?)(specification docs|$)/); return m ? m[1] : ''; };\n\nreturn $input.all().map((it) => {\n  const j = it.json;\n  const title = (j.title || '').toString();\n  const blob  = (j.search_blob || j.text || '').toString().toLowerCase();\n  const cats  = catText((j.text || '').toString());\n\n  let keep = false, reason = '';\n\n  if (NEG.test(blob)) { reason = 'cyber/bio-security, not physical security'; }\n  else if (STRONG.test(title) && !(CLEAN_BAD.test(title) && !/\\b(guard|security|cctv|patrol)\\b/i.test(title))) { keep = true; }\n  else if (FACIL.test(title)) { keep = true; }\n  else if (OTHER.test(blob)) { reason = 'construction / other trade, not a security or cleaning service'; }\n  else if (CAT_GOOD.test(cats)) { keep = true; }\n  else if (STRONG.test(blob)) { keep = true; }\n  else { reason = 'no security or cleaning service term found'; }\n\n  j._keep = keep;\n  j._drop_reason = reason;\n  j._stage = 'keyword';\n  return { json: j };\n});"
+      },
+      "id": "n-0023-4a10-9a10-tenderradar",
+      "name": "Classify Relevance",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1180,
+        760
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": false,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "k",
+              "leftValue": "={{ $json._keep }}",
+              "rightValue": "true",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "n-0024-4a10-9a10-tenderradar",
+      "name": "Relevant?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        1400,
+        760
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Alerts if a source that should always return rows returned none —\n// catches silent scrape breakage, which otherwise looks like a quiet week.\nconst EXPECTED = ['AusTender', 'VendorPanel', 'Brisbane City Council'];\nconst counts = {};\nfor (const it of $input.all()) {\n  const s = (it.json.source || 'unknown').toString();\n  counts[s] = (counts[s] || 0) + 1;\n}\nconst missing = EXPECTED.filter((s) => !counts[s]);\nconst summary = Object.entries(counts).map(([k, v]) => k + ': ' + v).join('  |  ') || 'nothing returned by any source';\nreturn [{ json: { counts, missing, unhealthy: missing.length > 0, summary, missingList: missing.join(', ') } }];"
+      },
+      "id": "n-0025-4a10-9a10-tenderradar",
+      "name": "Source Health Check",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1400,
+        1120
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": false,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "u",
+              "leftValue": "={{ $json.unhealthy }}",
+              "rightValue": "true",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "n-0026-4a10-9a10-tenderradar",
+      "name": "Any Source Down?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        1620,
+        1120
+      ]
+    },
+    {
+      "parameters": {
+        "select": "channel",
+        "channelId": {
+          "__rl": true,
+          "value": "C0B6K8652GM",
+          "mode": "list",
+          "cachedResultName": "hermes-testing"
+        },
+        "text": "=:warning: *Tender radar — source returned nothing*\\n\\nNo rows from: *{{ $json.missingList }}*\\n\\nThis usually means the page changed or the feed is down. Counts this run:\\n{{ $json.summary }}",
+        "otherOptions": {}
+      },
+      "id": "n-0027-4a10-9a10-tenderradar",
+      "name": "Slack - Source Down",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.2,
+      "position": [
+        1840,
+        1120
+      ],
+      "credentials": {
+        "slackApi": {
+          "id": "wBwfpnkQv3zlsz8V",
+          "name": "n8n BOT "
+        }
+      },
+      "webhookId": "b2508ce0-health-4f04-876c-sourcedown01"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Dedupe against the RowIDs already in the sheet (survives re-imports and\n// manual runs, unlike workflow static data) plus within this batch.\nlet seen = new Set();\ntry { seen = new Set(($('Collect Seen IDs').first().json.seen) || []); } catch (e) {}\nconst batch = new Set();\nconst out = [];\nfor (const it of $input.all()) {\n  const j = it.json;\n  const id = (j.guid || j.link || j.title || '').toString().slice(0, 180).replace(/[\\t\\n]/g, ' ');\n  if (!id) continue;\n  if (seen.has(id) || batch.has(id)) continue;\n  batch.add(id);\n  j.RowID = id;\n  out.push({ json: j });\n}\nreturn out;"
+      },
+      "id": "n-0028-4a10-9a10-tenderradar",
+      "name": "Dedupe vs Sheet",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1620,
+        640
+      ]
+    },
+    {
+      "parameters": {
+        "prompt": "=You are a tender analyst for a SECURITY (manpower guarding + electronic/CCTV) and COMMERCIAL CLEANING company based in South East Queensland (within ~50km of Brisbane and the Gold Coast). Security and cleaning are EQUAL priority.\n\nSCOPE: The company ONLY provides security and cleaning SERVICES. Do NOT treat construction, building, refurbishment, or warehouse-build projects as leads — Reject those. BUT if a tender is for security or cleaning SERVICES located AT a construction site, warehouse, depot or building, that IS a valid Security/Cleaning lead — keep it.\n\nReturn ONLY a valid JSON object (no markdown, no code fences, no prose):\n{\n  \"service_type\": \"Security | Cleaning | Both | None\",\n  \"security_type\": \"Manpower/Guarding | Electronic/CCTV | Mixed | N/A\",\n  \"summary\": \"1-2 sentence plain summary\",\n  \"location_text\": \"most specific place named e.g. 'Carrara, Gold Coast' or 'Statewide QLD'\",\n  \"state\": \"QLD | NSW | VIC | SA | WA | TAS | NT | ACT | National\",\n  \"region\": \"SEQ | QLD-statewide | QLD-other | interstate | national\",\n  \"budget_value\": \"value or 'Not Listed'\",\n  \"contract_duration\": \"e.g. '3 years + 2x1yr extension' or 'Not stated'\",\n  \"work_hours_per_week\": \"e.g. '40 hrs/week', '24/7 coverage', or 'Not stated'\",\n  \"ongoing_contract\": true or false,\n  \"is_panel\": true or false,\n  \"deadline\": \"closing date and time exactly as written\",\n  \"close_date_iso\": \"the closing date in YYYY-MM-DD, or '' if unclear\",\n  \"red_flags\": \"licences, prequalification, certs, incumbent, insurance, etc. or 'None found'\",\n  \"buyer_org\": \"the buying organisation / council / department, exactly as named, or ''\",\n  \"contact_name\": \"the tender contact officer's full name if explicitly stated, else ''\",\n  \"contact_role\": \"their position/title if stated, else ''\",\n  \"contact_email\": \"their email if explicitly stated, else ''\",\n  \"contact_phone\": \"their phone if explicitly stated, else ''\",\n  \"tier\": \"A | B | C | Reject\"\n}\n\nis_panel: set TRUE if this is a panel, standing offer arrangement (SOA), preferred supplier arrangement, register of pre-qualified suppliers, or prequalification round. These are high value even when the immediate scope is small, because membership unlocks future work that is never publicly advertised.\n\nCONTACT RULES: Extract buyer_org and contact_* ONLY if explicitly present in the tender text. NEVER invent an email/phone/name. If absent, return ''.\n\nSetting state and region:\n- Use the closing-time TIMEZONE as a strong state signal. 'Brisbane time' / UTC+10 with NO daylight saving = QLD. 'Canberra/Melbourne/Sydney time' or 'Hobart time' = interstate.\n- region = \"SEQ\" if within ~75km of Brisbane or the Gold Coast: Brisbane, Gold Coast, Logan, Ipswich, Redland, Moreton Bay, Caboolture, Beenleigh, Scenic Rim, Tweed, Sunshine Coast edge.\n- region = \"QLD-statewide\" for a QLD standing offer / panel / 'multiple locations' / 'Queensland' with no single fixed remote site.\n- region = \"QLD-other\" for a specific QLD location far from SEQ (Townsville, Cairns, Mackay, Rockhampton, Gladstone, Toowoomba, Mount Isa, Torres Strait, etc.).\n- region = \"interstate\" for a specific non-QLD location. region = \"national\" for Australia-wide.\n\nsecurity_type: Manpower/Guarding for static guards, patrols, crowd control, alarm response, concierge. Electronic/CCTV for camera supply/install, access control, monitoring systems. Mixed if both. N/A for cleaning-only.\n\nTiering (keep recall HIGH; when unsure lean B or C, never invent a Reject):\n- A = security or cleaning, region SEQ or QLD-statewide, ongoing or large, no blocking red flags.\n- B = security or cleaning but smaller/one-off, OR region QLD-other or national.\n- C = security or cleaning is only a minor or incidental part of a larger tender.\n- Reject = NOT a security or cleaning service (pure construction/refurbishment, supply of goods only, IT/cyber security, unrelated professional services).\n\nTender Text:\n{{ $json.text }}"
+      },
+      "id": "n-0029-4a10-9a10-tenderradar",
+      "name": "Basic LLM Chain",
+      "type": "@n8n/n8n-nodes-langchain.chainLlm",
+      "typeVersion": 1,
+      "position": [
+        1840,
+        640
+      ]
+    },
+    {
+      "parameters": {
+        "model": "google/gemini-2.5-flash-lite",
+        "options": {}
+      },
+      "id": "n-0030-4a10-9a10-tenderradar",
+      "name": "OpenRouter Chat Model",
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenRouter",
+      "typeVersion": 1,
+      "position": [
+        1840,
+        840
+      ],
+      "credentials": {
+        "openRouterApi": {
+          "id": "QhsMW1GW3kISMgNL",
+          "name": "N8N - 11/2/26"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "let raw = ($json.text || '').toString().replace(/```json/gi, '').replace(/```/g, '').trim();\nlet parsed;\ntry { parsed = JSON.parse(raw); } catch (e) { parsed = { tier: 'Reject', parse_error: true }; }\nconst meta = $('Dedupe vs Sheet').item.json;\nreturn { json: {\n  RowID: meta.RowID, title: meta.title, link: meta.link, source: meta.source,\n  posted_raw: meta.posted_raw, ariba_request: meta.ariba_request || '',\n  ...parsed\n} };"
+      },
+      "id": "n-0031-4a10-9a10-tenderradar",
+      "name": "Parse Tender JSON",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2080,
+        640
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// === IN-ZONE GATE ===\n// Whitelist of QLD suburbs/postcodes within ~50km of Brisbane & the Gold Coast.\n// Tags rather than filters, so out-of-zone drops reach the rejection log.\nconst KEEP_STATEWIDE = true;\nconst POSTCODES = new Set([\"4000\", \"4001\", \"4005\", \"4006\", \"4007\", \"4008\", \"4009\", \"4010\", \"4011\", \"4012\", \"4013\", \"4014\", \"4017\", \"4018\", \"4019\", \"4020\", \"4021\", \"4022\", \"4025\", \"4030\", \"4031\", \"4032\", \"4034\", \"4035\", \"4036\", \"4037\", \"4051\", \"4053\", \"4054\", \"4055\", \"4059\", \"4060\", \"4061\", \"4064\", \"4065\", \"4066\", \"4068\", \"4069\", \"4070\", \"4073\", \"4074\", \"4075\", \"4076\", \"4077\", \"4078\", \"4101\", \"4102\", \"4103\", \"4104\", \"4105\", \"4106\", \"4107\", \"4108\", \"4109\", \"4110\", \"4111\", \"4112\", \"4113\", \"4114\", \"4115\", \"4116\", \"4117\", \"4118\", \"4119\", \"4120\", \"4121\", \"4122\", \"4123\", \"4124\", \"4125\", \"4127\", \"4128\", \"4129\", \"4130\", \"4131\", \"4132\", \"4133\", \"4151\", \"4152\", \"4153\", \"4154\", \"4155\", \"4156\", \"4157\", \"4158\", \"4159\", \"4160\", \"4161\", \"4163\", \"4164\", \"4165\", \"4169\", \"4170\", \"4171\", \"4172\", \"4173\", \"4174\", \"4178\", \"4179\", \"4183\", \"4184\", \"4205\", \"4207\", \"4208\", \"4209\", \"4210\", \"4211\", \"4212\", \"4213\", \"4214\", \"4215\", \"4216\", \"4217\", \"4218\", \"4219\", \"4220\", \"4221\", \"4223\", \"4224\", \"4225\", \"4226\", \"4227\", \"4228\", \"4270\", \"4271\", \"4272\", \"4275\", \"4280\", \"4285\", \"4300\", \"4301\", \"4303\", \"4304\", \"4305\", \"4306\", \"4307\", \"4311\", \"4312\", \"4340\", \"4346\", \"4500\", \"4501\", \"4502\", \"4503\", \"4504\", \"4505\", \"4506\", \"4507\", \"4508\", \"4509\", \"4510\", \"4511\", \"4520\", \"4521\"]);\nconst SUBURBS = new Set([\"acacia ridge\", \"advancetown\", \"albany creek\", \"alberton\", \"albion\", \"alderley\", \"alexandra hills\", \"algester\", \"allenview\", \"altandi\", \"amberley\", \"amity\", \"amity point\", \"anglers paradise\", \"annerley\", \"anstead\", \"arana hills\", \"archerfield\", \"armstrong creek\", \"arundel\", \"ascot\", \"ashgrove\", \"ashgrove east\", \"ashgrove west\", \"ashmore\", \"ashwell\", \"aspley\", \"auchenflower\", \"augustine heights\", \"austinville\", \"avoca vale\", \"bahrs scrub\", \"bald hills\", \"balingool\", \"ballymore\", \"balmoral\", \"banks creek\", \"banksia beach\", \"bannockburn\", \"banoon\", \"banyo\", \"bardon\", \"bardon west\", \"barellan point\", \"baroona\", \"basin pocket\", \"beachmere\", \"beaudesert\", \"beechmont\", \"beenleigh\", \"belivah\", \"bellara\", \"bellbird park\", \"bellbowrie\", \"bellhaven\", \"bellmere\", \"belmont\", \"belmont heights\", \"benobble\", \"benowa\", \"berrinba\", \"bethania\", \"biddaddaba\", \"biggera waters\", \"bilinga\", \"binna burra\", \"birkdale\", \"blacksoil\", \"blackstone\", \"blackwall\", \"bloomfleet\", \"bongaree\", \"bonogin\", \"boondall\", \"booval\", \"borallon\", \"boronia heights\", \"bowen bridge\", \"bowen hills\", \"boykambil\", \"boyland\", \"bracken ridge\", \"brassall\", \"brassall heights\", \"bray park\", \"breakfast creek\", \"bremer\", \"brendale\", \"bribie island\", \"bribie island north\", \"bridgeman downs\", \"brighton\", \"brighton eventide\", \"brisbane\", \"brisbane airport\", \"brisbane city\", \"brisbane exhibition\", \"broadbeach\", \"broadbeach waters\", \"bromelton\", \"brookfield\", \"brookwater\", \"browns plains\", \"brownsleigh\", \"bryden\", \"buccan\", \"bulimba\", \"bulwer island\", \"bundall\", \"bundamba\", \"bunya\", \"buranda\", \"burbank\", \"burleigh heads\", \"burleigh town\", \"burleigh waters\", \"burpengary\", \"burpengary east\", \"cabbage tree point\", \"caboolture\", \"caboolture south\", \"cainbable\", \"calamvale\", \"camira\", \"camp hill\", \"camp mountain\", \"campbells pocket\", \"cannon hill\", \"canowindra\", \"canungra\", \"capalaba\", \"capalaba west\", \"carbrook\", \"carina\", \"carina heights\", \"carina north\", \"carindale\", \"carole park\", \"carrara\", \"carseldine\", \"cashmere\", \"cashs crossing\", \"cedar creek\", \"cedar grove\", \"cedar vale\", \"chambers flat\", \"chandler\", \"chapel hill\", \"chatswood hills\", \"chelmer\", \"chermside\", \"chermside south\", \"chermside west\", \"chevron island\", \"chirn park\", \"christmas creek\", \"churchill\", \"chuwar\", \"clagiraba\", \"clarendon\", \"clayfield\", \"clear island waters\", \"clear mountain\", \"cleveland\", \"clifton hill\", \"clontarf\", \"clontarf beach\", \"closeburn\", \"coalfalls\", \"collingwood park\", \"colmslie\", \"coochiemudlo island\", \"coolana\", \"coolangatta\", \"coombabah\", \"coomera\", \"coopers plains\", \"coorparoo\", \"corinda\", \"cornubia\", \"craigslea\", \"crestmead\", \"cryna\", \"currigee\", \"currumbin\", \"currumbin valley\", \"currumbin waters\", \"daisy hill\", \"dakabin\", \"darlington\", \"darra\", \"dayboro\", \"deagon\", \"deception bay\", \"deebing heights\", \"dinmore\", \"doboy\", \"dohles rocks\", \"doolandella\", \"doomben\", \"dorrington\", \"draper\", \"drewvale\", \"dundas\", \"dunwich\", \"durack\", \"dutton park\", \"eagle farm\", \"eagle heights\", \"eagle junction\", \"eagleby\", \"east brisbane\", \"east ipswich\", \"eastern heights\", \"eatons hill\", \"ebbw vale\", \"ebenezer\", \"edens landing\", \"eight mile plains\", \"eildon hill\", \"ekibin\", \"elanora\", \"ellen grove\", \"england creek\", \"enoggera\", \"enoggera reservoir\", \"erobin\", \"everton hills\", \"everton park\", \"fairfield\", \"fairney view\", \"fernvale\", \"ferny glen\", \"ferny grove\", \"ferny hills\", \"fig tree pocket\", \"fitzgibbon\", \"flinders lakes\", \"flinders view\", \"florida gardens\", \"flying fox\", \"forest glade\", \"forest lake\", \"forestdale\", \"fortitude valley\", \"frenchs forest\", \"fruitgrove\", \"gailes\", \"galloways hill\", \"gaven\", \"gaythorne\", \"geebung\", \"gilberton\", \"gilston\", \"glamorgan vale\", \"glen kedron\", \"gleneagle\", \"glenlogan\", \"godwin beach\", \"gold coast\", \"goodna\", \"goodna east\", \"goolman\", \"gordon park\", \"graceville\", \"graceville east\", \"grange\", \"greenbank\", \"greenslopes\", \"greenwood village\", \"griffin\", \"grovely\", \"guanaba\", \"gumdale\", \"haigslea\", \"halfway creek\", \"hamilton\", \"hamilton central\", \"hawthorne\", \"heathwood\", \"helensvale\", \"hemmant\", \"hendra\", \"heritage park\", \"herston\", \"highgate hill\", \"highland park\", \"highvale\", \"hillcrest\", \"hillview\", \"holland park\", \"holland park east\", \"holland park west\", \"hollywell\", \"holmview\", \"holts hill\", \"hope island\", \"humpybong\", \"ilbogan\", \"illinbah\", \"inala\", \"inala east\", \"inala heights\", \"inala west\", \"indooroopilly\", \"ingleside\", \"ipswich\", \"ironbark\", \"isle of capri\", \"ithaca\", \"jacobs well\", \"jamboree heights\", \"jeebropilly\", \"jimboomba\", \"jindalee\", \"jollys lookout\", \"josephville\", \"joyner\", \"jubilee\", \"kagaru\", \"kairabah\", \"kalinga\", \"kallangur\", \"kangaroo point\", \"karalee\", \"karana downs\", \"karawatha\", \"karrabin\", \"karragarra island\", \"kedron\", \"kedron upper\", \"keebra park\", \"kelvin grove\", \"kenmore\", \"kenmore east\", \"kenmore hills\", \"keperra\", \"kerry\", \"kerrydale\", \"kholo\", \"kimberley park\", \"king scrub\", \"kingsholme\", \"kingston\", \"kippa-ring\", \"kirra\", \"knapp creek\", \"kobble creek\", \"kooringal\", \"kuraby\", \"kurwongbah\", \"labrador\", \"laceys creek\", \"lake manchester\", \"lamb island\", \"lamington national park\", \"larapinta\", \"laravale\", \"lark hill\", \"latimer\", \"lawnton\", \"leichhardt\", \"lindum\", \"loamside\", \"logan\", \"logan central\", \"logan reserve\", \"logan village\", \"logandale\", \"loganholme\", \"loganlea\", \"lone pine\", \"long pocket\", \"loreto hill\", \"lota\", \"lower beechmont\", \"lowood\", \"luscombe\", \"lutwyche\", \"lyons\", \"lytton\", \"macgregor\", \"mackenzie\", \"maclean\", \"macleay island\", \"main beach\", \"mango hill\", \"manly\", \"manly west\", \"mansfield\", \"marburg\", \"margate\", \"margate beach\", \"marsden\", \"maudsland\", \"mayne\", \"mcdowall\", \"meadowbrook\", \"meeandah\", \"meldale\", \"mermaid beach\", \"mermaid keys\", \"mermaid waters\", \"merrimac\", \"miami\", \"miami keys\", \"middle park\", \"milton\", \"minden\", \"mitchelton\", \"moana park\", \"moggill\", \"molendinar\", \"monarch glen\", \"monsildale\", \"monterey keys\", \"moodlu\", \"moores pocket\", \"moorina\", \"moorooka\", \"moorvale\", \"morayfield\", \"moreton bay\", \"moreton island\", \"morningside\", \"mount coot-tha\", \"mount cotton\", \"mount crosby\", \"mount glorious\", \"mount gravatt\", \"mount gravatt east\", \"mount marrow\", \"mount nathan\", \"mount nebo\", \"mount ommaney\", \"mount pleasant\", \"mount samson\", \"mount tamborine\", \"mount thompson\", \"mount warren park\", \"mudgeeraba\", \"muirlea\", \"mundoolun\", \"munruben\", \"murarrie\", \"murrumba downs\", \"mutdapilly\", \"myrtletown\", \"narangba\", \"nashville\", \"nathan\", \"natural bridge\", \"nerang\", \"neranwood\", \"new beith\", \"new chum\", \"new farm\", \"newmarket\", \"newport\", \"newstead\", \"newtown\", \"nindooinbah\", \"ningi\", \"nobby beach\", \"norman park\", \"normanby\", \"north booval\", \"north ipswich\", \"north lakes\", \"north maclean\", \"north stradbroke island\", \"north tamborine\", \"north tivoli\", \"northgate\", \"norwell\", \"nudgee\", \"nudgee beach\", \"numinbah valley\", \"nundah\", \"o'reilly\", \"o'reillys\", \"ocean view\", \"one mile\", \"opossum creek\", \"ormeau\", \"ormeau hills\", \"ormiston\", \"oxenford\", \"oxford park\", \"oxley\", \"pacific pines\", \"paddington\", \"pallara\", \"palm beach\", \"paradise island\", \"paradise point\", \"paradise point keys\", \"paradise waters\", \"park ridge\", \"park ridge south\", \"parkinson\", \"parkwood\", \"patrick estate\", \"peak crossing\", \"peel island\", \"perulpa island\", \"petrie\", \"petrie terrace\", \"pimpama\", \"pindari hills\", \"pine mountain\", \"pinjarra hills\", \"pinkenba\", \"pinklands\", \"point halloran\", \"point talburpin\", \"port of brisbane\", \"priestdale\", \"priests gully\", \"priors pocket\", \"pullenvale\", \"purga\", \"raceview\", \"rainbow bay\", \"rainworth\", \"ransome\", \"raymonds hill\", \"red hill\", \"redbank\", \"redbank plains\", \"redcliffe\", \"redcliffe north\", \"redland\", \"redland bay\", \"redlands\", \"reedy creek\", \"regents park\", \"rialto\", \"richlands\", \"rifle range\", \"rio vista\", \"ripley\", \"riverbend\", \"riverhills\", \"riverview\", \"robertson\", \"robina\", \"rochedale\", \"rochedale south\", \"rocklea\", \"rocksberg\", \"rosewood\", \"rothwell\", \"runaway bay\", \"runcorn\", \"rush creek\", \"russell island\", \"sadliers crossing\", \"salisbury\", \"salisbury east\", \"samford\", \"samford valley\", \"samford village\", \"samsonvale\", \"sanctuary cove\", \"sandgate\", \"sandstone point\", \"santa barbara\", \"sarabah\", \"scarborough\", \"scotts point\", \"serviceton\", \"seven hills\", \"seventeen mile\", \"seventeen mile rocks\", \"shailer park\", \"sheldon\", \"sherwood\", \"shorncliffe\", \"silkstone\", \"silverbark ridge\", \"sinnamon park\", \"slacks creek\", \"somerset hills\", \"sorrento\", \"south bank\", \"south brisbane\", \"south maclean\", \"south ripley\", \"south stradbroke\", \"southern lamington\", \"southport\", \"sovereign islands\", \"split yard creek\", \"spring hill\", \"spring mountain\", \"springbrook\", \"springfield\", \"springfield central\", \"springfield lakes\", \"springwood\", \"st johns wood\", \"stafford\", \"stafford heights\", \"stanley bridge\", \"stapylton\", \"steiglitz\", \"stockleigh\", \"stones corner\", \"strathpine\", \"strathpine city\", \"stretton\", \"stuartholme\", \"studio village\", \"sumner\", \"sundale\", \"sunnybank\", \"sunnybank hills\", \"sunnybank south\", \"surfers paradise\", \"swanbank\", \"tabooba\", \"tabragalba\", \"taigum\", \"tallai\", \"tallebudgera\", \"tallebudgera valley\", \"tallegalla\", \"tally valley\", \"tamborine\", \"tamborine mountain\", \"tamborine village\", \"tamrookum creek\", \"tanah merah\", \"tangalooma\", \"tarampa\", \"taringa\", \"tarragindi\", \"teelah\", \"teneriffe\", \"tennyson\", \"thagoona\", \"the gap\", \"the spit\", \"thompson estate\", \"thorneside\", \"thornlands\", \"tingalpa\", \"tivoli\", \"toombul\", \"toorbul\", \"toowong\", \"torwood\", \"trinder park\", \"tugun\", \"tugun heights\", \"underwood\", \"upper brookfield\", \"upper caboolture\", \"upper coomera\", \"upper kedron\", \"upper mount gravatt\", \"varsity lakes\", \"veresdale\", \"veresdale scrub\", \"vernor\", \"victoria point\", \"victoria point west\", \"virginia\", \"wacol\", \"wacol east immigration centre\", \"wakerley\", \"walloon\", \"wanora\", \"warner\", \"washpool\", \"waterford\", \"waterford west\", \"wavell heights\", \"wavell heights north\", \"wellers hill\", \"wellington point\", \"west amberley\", \"west burleigh\", \"west end\", \"west ipswich\", \"westlake\", \"whinstanes\", \"white patch\", \"white rock\", \"whites hill\", \"whiteside\", \"wights mountain\", \"willawong\", \"willow vale\", \"willowbank\", \"wilston\", \"windaroo\", \"windsor\", \"wishart\", \"witheren\", \"wivenhoe\", \"wivenhoe hill\", \"wivenhoe pocket\", \"wolffdene\", \"wongawallan\", \"wonglepong\", \"woodend\", \"woodhill\", \"woodridge\", \"woodridge east\", \"woody point\", \"woolloongabba\", \"wooloowin\", \"woongoolba\", \"woorim\", \"worongary\", \"wulkuraka\", \"wynnum\", \"wynnum central\", \"wynnum north\", \"wynnum west\", \"yamanto\", \"yarrabilba\", \"yatala\", \"yeerongpilly\", \"yellow wood\", \"yeronga\", \"yeronga west\", \"yugar\", \"zillmere\"]);\n\nconst norm = (s) => (s || '').toString().toLowerCase();\nconst INTERSTATE = ['nsw','vic','sa','wa','tas','nt','act','new south wales','victoria','tasmania'];\n\nreturn $input.all().map((item) => {\n  const j = item.json;\n  let inzone = '', reason = '';\n\n  if (!['A','B','C'].includes(j.tier)) {\n    reason = 'LLM tier = ' + (j.tier || 'none');\n  } else {\n    const region = norm(j.region), state = norm(j.state), loc = norm(j.location_text);\n    if (region === 'interstate' || INTERSTATE.includes(state)) {\n      reason = 'interstate (' + (j.state || j.region) + ')';\n    } else {\n      if (KEEP_STATEWIDE && region === 'qld-statewide') inzone = 'Statewide';\n      if (!inzone) {\n        const found = (loc.match(/\\b4\\d{3}\\b/g) || []);\n        if (found.some((pc) => POSTCODES.has(pc))) inzone = 'Yes (postcode)';\n      }\n      if (!inzone) {\n        for (const sub of SUBURBS) {\n          if (sub.length < 4) continue;\n          const re = new RegExp('(^|[^a-z])' + sub.replace(/[.*+?^${}()|[\\]\\\\]/g, '\\\\$&') + '([^a-z]|$)');\n          if (re.test(loc)) { inzone = 'Yes (suburb)'; break; }\n        }\n      }\n      if (!inzone) reason = 'outside 50km zone (' + (j.location_text || 'no location') + ')';\n    }\n  }\n\n  if (inzone && inzone.startsWith('Yes')) j.region = 'SEQ';\n  j.InZone = inzone;\n  j._keep = !!inzone;\n  j._drop_reason = reason;\n  j._stage = 'zone/tier';\n  return { json: j };\n});"
+      },
+      "id": "n-0032-4a10-9a10-tenderradar",
+      "name": "In-Zone Gate",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2300,
+        640
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": false,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "z",
+              "leftValue": "={{ $json._keep }}",
+              "rightValue": "true",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "n-0033-4a10-9a10-tenderradar",
+      "name": "In Zone?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        2520,
+        640
+      ]
+    },
+    {
+      "parameters": {
+        "prompt": "=Write a short, ready-to-edit Expression of Interest opening that a South East Queensland security & cleaning contractor could send in response to this tender. 4-6 sentences, professional and warm. Name the buyer and the specific service required, highlight relevant strengths (fully licensed and accredited, rapid local SEQ response, proven on ongoing/contracted work), and finish with a line inviting the next step. Use [bracketed placeholders] for company-specific details. Plain text only, no markdown, no headings.\n\nTender: {{ $json.title }}\nService: {{ $json.service_type }} ({{ $json.security_type }})\nLocation: {{ $json.location_text }} ({{ $json.region }})\nContract: {{ $json.contract_duration }} | Hours: {{ $json.work_hours_per_week }}\nPanel/SOA: {{ $json.is_panel }}\nSummary: {{ $json.summary }}"
+      },
+      "id": "n-0034-4a10-9a10-tenderradar",
+      "name": "Write Bid Draft",
+      "type": "@n8n/n8n-nodes-langchain.chainLlm",
+      "typeVersion": 1,
+      "position": [
+        2740,
+        540
+      ]
+    },
+    {
+      "parameters": {
+        "model": "google/gemini-2.5-flash-lite",
+        "options": {}
+      },
+      "id": "n-0035-4a10-9a10-tenderradar",
+      "name": "OpenRouter Chat Model1",
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenRouter",
+      "typeVersion": 1,
+      "position": [
+        2740,
+        740
+      ],
+      "credentials": {
+        "openRouterApi": {
+          "id": "QhsMW1GW3kISMgNL",
+          "name": "N8N - 11/2/26"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "const meta = $('In-Zone Gate').item.json;\nreturn { json: { ...meta, bid_draft: ($json.text || '').toString().trim() } };"
+      },
+      "id": "n-0036-4a10-9a10-tenderradar",
+      "name": "Attach Draft",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2960,
+        540
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const fmt = (d) => { try { const x = new Date(d); return isNaN(x) ? '' : x.toLocaleDateString('en-AU', { timeZone: 'Australia/Brisbane' }); } catch (e) { return ''; } };\nconst capturedTs = new Date().toLocaleString('en-AU', { timeZone: 'Australia/Brisbane' });\nconst today = new Date();\nreturn $input.all().map((it) => {\n  const j = it.json;\n  const close = j.close_date_iso ? new Date(j.close_date_iso) : null;\n  const daysToClose = (close && !isNaN(close)) ? Math.round((close - today) / 86400000) : '';\n  return { json: {\n    RowID: j.RowID || (j.guid || j.link || j.title || '').toString().slice(0, 180),\n    Captured: capturedTs,\n    HumanApproval: 'Pending',\n    DocumentLink: '',\n    Tier: j.tier || '',\n    IsPanel: j.is_panel ? 'PANEL' : '',\n    Service: j.service_type || '',\n    SecurityType: j.security_type || '',\n    Title: j.title || '',\n    Location: j.location_text || '',\n    Region: j.region || '',\n    State: j.state || '',\n    Budget: j.budget_value || '',\n    ContractDuration: j.contract_duration || '',\n    WorkHours: j.work_hours_per_week || '',\n    Posted: j.posted_raw ? fmt(j.posted_raw) : '',\n    Deadline: j.deadline || '',\n    DaysToClose: daysToClose,\n    RedFlags: j.red_flags || '',\n    Summary: j.summary || '',\n    BuyerOrg: j.buyer_org || '',\n    ContactName: j.contact_name || '',\n    ContactRole: j.contact_role || '',\n    ContactEmail: j.contact_email || '',\n    ContactPhone: j.contact_phone || '',\n    BidDraft: j.bid_draft || '',\n    Source: j.source || '',\n    Link: j.link || '',\n    AribaRequest: j.ariba_request || ''\n  }};\n});"
+      },
+      "id": "n-0037-4a10-9a10-tenderradar",
+      "name": "Format for Sheets",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3180,
+        540
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "1YrekkkB-YjNAhWA1A-VYMxCcEl8A-UB5d627_zx7fEY",
+          "mode": "list",
+          "cachedResultName": "Tender sheets "
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 1020027150,
+          "mode": "list",
+          "cachedResultName": "Claude v3"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "RowID": "={{ $json.RowID }}",
+            "Captured": "={{ $json.Captured }}",
+            "HumanApproval": "={{ $json.HumanApproval }}",
+            "DocumentLink": "={{ $json.DocumentLink }}",
+            "Tier": "={{ $json.Tier }}",
+            "IsPanel": "={{ $json.IsPanel }}",
+            "Service": "={{ $json.Service }}",
+            "SecurityType": "={{ $json.SecurityType }}",
+            "Title": "={{ $json.Title }}",
+            "Location": "={{ $json.Location }}",
+            "Region": "={{ $json.Region }}",
+            "State": "={{ $json.State }}",
+            "Budget": "={{ $json.Budget }}",
+            "ContractDuration": "={{ $json.ContractDuration }}",
+            "WorkHours": "={{ $json.WorkHours }}",
+            "Posted": "={{ $json.Posted }}",
+            "Deadline": "={{ $json.Deadline }}",
+            "DaysToClose": "={{ $json.DaysToClose }}",
+            "RedFlags": "={{ $json.RedFlags }}",
+            "Summary": "={{ $json.Summary }}",
+            "BuyerOrg": "={{ $json.BuyerOrg }}",
+            "ContactName": "={{ $json.ContactName }}",
+            "ContactRole": "={{ $json.ContactRole }}",
+            "ContactEmail": "={{ $json.ContactEmail }}",
+            "ContactPhone": "={{ $json.ContactPhone }}",
+            "BidDraft": "={{ $json.BidDraft }}",
+            "Source": "={{ $json.Source }}",
+            "Link": "={{ $json.Link }}",
+            "AribaRequest": "={{ $json.AribaRequest }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "RowID",
+              "displayName": "RowID",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Captured",
+              "displayName": "Captured",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "HumanApproval",
+              "displayName": "HumanApproval",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "DocumentLink",
+              "displayName": "DocumentLink",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Tier",
+              "displayName": "Tier",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "IsPanel",
+              "displayName": "IsPanel",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Service",
+              "displayName": "Service",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "SecurityType",
+              "displayName": "SecurityType",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Title",
+              "displayName": "Title",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Location",
+              "displayName": "Location",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Region",
+              "displayName": "Region",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "State",
+              "displayName": "State",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Budget",
+              "displayName": "Budget",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "ContractDuration",
+              "displayName": "ContractDuration",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "WorkHours",
+              "displayName": "WorkHours",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Posted",
+              "displayName": "Posted",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Deadline",
+              "displayName": "Deadline",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "DaysToClose",
+              "displayName": "DaysToClose",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "RedFlags",
+              "displayName": "RedFlags",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Summary",
+              "displayName": "Summary",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "BuyerOrg",
+              "displayName": "BuyerOrg",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "ContactName",
+              "displayName": "ContactName",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "ContactRole",
+              "displayName": "ContactRole",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "ContactEmail",
+              "displayName": "ContactEmail",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "ContactPhone",
+              "displayName": "ContactPhone",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "BidDraft",
+              "displayName": "BidDraft",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Source",
+              "displayName": "Source",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Link",
+              "displayName": "Link",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "AribaRequest",
+              "displayName": "AribaRequest",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": true
+        },
+        "options": {}
+      },
+      "id": "n-0038-4a10-9a10-tenderradar",
+      "name": "Google Sheets",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.2,
+      "position": [
+        3400,
+        540
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "HLZxRgOR9Y2XBrnV",
+          "name": "Sheets permission(14/07/2026)"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": false,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "a",
+              "leftValue": "={{ $json.Tier }}",
+              "rightValue": "A",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            },
+            {
+              "id": "b",
+              "leftValue": "={{ $json.Tier }}",
+              "rightValue": "B",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            },
+            {
+              "id": "p",
+              "leftValue": "={{ $json.IsPanel }}",
+              "rightValue": "PANEL",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "or"
+        },
+        "options": {}
+      },
+      "id": "n-0039-4a10-9a10-tenderradar",
+      "name": "High Priority?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        3400,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "select": "channel",
+        "channelId": {
+          "__rl": true,
+          "value": "C0B6K8652GM",
+          "mode": "list",
+          "cachedResultName": "hermes-testing"
+        },
+        "text": "=:mega: *New tender — Tier {{ $json.Tier }} ({{ $json.Service }})* {{ $json.IsPanel }}\\n\\n*{{ $json.Title }}*\\n:round_pushpin: {{ $json.Location }}  |  {{ $json.Region }}\\n:alarm_clock: Closes: {{ $json.Deadline }}  ({{ $json.DaysToClose }} days)\\n:office: {{ $json.BuyerOrg }}\\n:telephone_receiver: {{ $json.ContactName }} {{ $json.ContactEmail }} {{ $json.ContactPhone }}\\n:satellite: Source: {{ $json.Source }}\\n\\n{{ $json.Summary }}\\n\\nApprove in the sheet, then paste the DocumentLink.\\n{{ $json.Link }}",
+        "otherOptions": {}
+      },
+      "id": "n-0040-4a10-9a10-tenderradar",
+      "name": "Slack - New Tender",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.2,
+      "position": [
+        3620,
+        300
+      ],
+      "credentials": {
+        "slackApi": {
+          "id": "wBwfpnkQv3zlsz8V",
+          "name": "n8n BOT "
+        }
+      },
+      "webhookId": "b1508ce0-newtender-4f04-876c-alert00001"
+    },
+    {
+      "parameters": {
+        "jsCode": "const ts = new Date().toLocaleString('en-AU', { timeZone: 'Australia/Brisbane' });\nreturn $input.all().map((it) => {\n  const j = it.json;\n  return { json: {\n    Logged: ts,\n    Source: j.source || '',\n    Title: (j.title || '').toString().slice(0, 200),\n    Stage: j._stage || '',\n    Reason: j._drop_reason || '',\n    Tier: j.tier || '',\n    Location: j.location_text || '',\n    Link: j.link || '',\n    Snippet: (j.text || j.search_blob || '').toString().slice(0, 300)\n  }};\n});"
+      },
+      "id": "n-0041-4a10-9a10-tenderradar",
+      "name": "Build Rejection Rows",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1840,
+        400
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "1YrekkkB-YjNAhWA1A-VYMxCcEl8A-UB5d627_zx7fEY",
+          "mode": "list",
+          "cachedResultName": "Tender sheets "
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Rejected",
+          "mode": "name",
+          "cachedResultName": "Rejected"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Logged": "={{ $json.Logged }}",
+            "Source": "={{ $json.Source }}",
+            "Title": "={{ $json.Title }}",
+            "Stage": "={{ $json.Stage }}",
+            "Reason": "={{ $json.Reason }}",
+            "Tier": "={{ $json.Tier }}",
+            "Location": "={{ $json.Location }}",
+            "Link": "={{ $json.Link }}",
+            "Snippet": "={{ $json.Snippet }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "Logged",
+              "displayName": "Logged",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Source",
+              "displayName": "Source",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Title",
+              "displayName": "Title",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Stage",
+              "displayName": "Stage",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Reason",
+              "displayName": "Reason",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Tier",
+              "displayName": "Tier",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Location",
+              "displayName": "Location",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Link",
+              "displayName": "Link",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Snippet",
+              "displayName": "Snippet",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": true
+        },
+        "options": {}
+      },
+      "id": "n-0042-4a10-9a10-tenderradar",
+      "name": "Log Rejected",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.2,
+      "position": [
+        2080,
+        400
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "HLZxRgOR9Y2XBrnV",
+          "name": "Sheets permission(14/07/2026)"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const ts = new Date().toLocaleString('en-AU', { timeZone: 'Australia/Brisbane' });\nreturn $input.all().map((it) => {\n  const j = it.json;\n  const rel = (j.text || '').match(/release date\\s*:?\\s*([A-Za-z]+\\s*\\d{4}|TBC|TBA)/i);\n  const cat = (j.text || '').match(/category\\s*:?\\s*([^]*?)(release date|tender type|contact|$)/i);\n  return { json: {\n    Logged: ts,\n    Source: j.source || 'Brisbane City Council',\n    Title: j.title || '',\n    Ref: j.ref || '',\n    Category: cat ? cat[1].replace(/\\s+/g, ' ').trim().slice(0, 120) : '',\n    ExpectedRelease: rel ? rel[1].trim() : '',\n    Link: j.link || '',\n    Detail: (j.text || '').toString().slice(0, 500)\n  }};\n});"
+      },
+      "id": "n-0043-4a10-9a10-tenderradar",
+      "name": "Build Pipeline Rows",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1180,
+        1000
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "1YrekkkB-YjNAhWA1A-VYMxCcEl8A-UB5d627_zx7fEY",
+          "mode": "list",
+          "cachedResultName": "Tender sheets "
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Pipeline Watch",
+          "mode": "name",
+          "cachedResultName": "Pipeline Watch"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Logged": "={{ $json.Logged }}",
+            "Source": "={{ $json.Source }}",
+            "Title": "={{ $json.Title }}",
+            "Ref": "={{ $json.Ref }}",
+            "Category": "={{ $json.Category }}",
+            "ExpectedRelease": "={{ $json.ExpectedRelease }}",
+            "Link": "={{ $json.Link }}",
+            "Detail": "={{ $json.Detail }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "Logged",
+              "displayName": "Logged",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Source",
+              "displayName": "Source",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Title",
+              "displayName": "Title",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Ref",
+              "displayName": "Ref",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Category",
+              "displayName": "Category",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "ExpectedRelease",
+              "displayName": "ExpectedRelease",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Link",
+              "displayName": "Link",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Detail",
+              "displayName": "Detail",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": true
+        },
+        "options": {}
+      },
+      "id": "n-0044-4a10-9a10-tenderradar",
+      "name": "Log Pipeline Watch",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.2,
+      "position": [
+        1400,
+        1000
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "HLZxRgOR9Y2XBrnV",
+          "name": "Sheets permission(14/07/2026)"
+        }
+      },
+      "onError": "continueRegularOutput"
+    }
+  ],
+  "connections": {
+    "Schedule Trigger": {
+      "main": [
+        [
+          {
+            "node": "Read Existing RowIDs",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read Existing RowIDs": {
+      "main": [
+        [
+          {
+            "node": "Collect Seen IDs",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Collect Seen IDs": {
+      "main": [
+        [
+          {
+            "node": "Fetch AusTender RSS",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Fetch VendorPanel RSS",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Fetch Brisbane CC",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Read Watchlist",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch AusTender RSS": {
+      "main": [
+        [
+          {
+            "node": "Convert XML (AT)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Convert XML (AT)": {
+      "main": [
+        [
+          {
+            "node": "Split (AT)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Split (AT)": {
+      "main": [
+        [
+          {
+            "node": "Normalize (AusTender)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch VendorPanel RSS": {
+      "main": [
+        [
+          {
+            "node": "Convert XML (VP)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Convert XML (VP)": {
+      "main": [
+        [
+          {
+            "node": "Split (VP)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Split (VP)": {
+      "main": [
+        [
+          {
+            "node": "Normalize (VendorPanel)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch Brisbane CC": {
+      "main": [
+        [
+          {
+            "node": "Extract BCC Rows",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract BCC Rows": {
+      "main": [
+        [
+          {
+            "node": "Split BCC Rows",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Split BCC Rows": {
+      "main": [
+        [
+          {
+            "node": "Normalize (BCC)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalize (BCC)": {
+      "main": [
+        [
+          {
+            "node": "BCC Open or Upcoming?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read Watchlist": {
+      "main": [
+        [
+          {
+            "node": "Scrape Watchlist",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Robot Push (Webhook)": {
+      "main": [
+        [
+          {
+            "node": "Normalize (Robot)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Tender Inbox (IMAP)": {
+      "main": [
+        [
+          {
+            "node": "Normalize (Email)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalize (AusTender)": {
+      "main": [
+        [
+          {
+            "node": "Classify Relevance",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalize (VendorPanel)": {
+      "main": [
+        [
+          {
+            "node": "Classify Relevance",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Scrape Watchlist": {
+      "main": [
+        [
+          {
+            "node": "Classify Relevance",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalize (Robot)": {
+      "main": [
+        [
+          {
+            "node": "Classify Relevance",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalize (Email)": {
+      "main": [
+        [
+          {
+            "node": "Classify Relevance",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "BCC Open or Upcoming?": {
+      "main": [
+        [
+          {
+            "node": "Build Pipeline Rows",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Classify Relevance",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Classify Relevance": {
+      "main": [
+        [
+          {
+            "node": "Relevant?",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Source Health Check",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Source Health Check": {
+      "main": [
+        [
+          {
+            "node": "Any Source Down?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Any Source Down?": {
+      "main": [
+        [
+          {
+            "node": "Slack - Source Down",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Relevant?": {
+      "main": [
+        [
+          {
+            "node": "Dedupe vs Sheet",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Build Rejection Rows",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Dedupe vs Sheet": {
+      "main": [
+        [
+          {
+            "node": "Basic LLM Chain",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenRouter Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Basic LLM Chain",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Basic LLM Chain": {
+      "main": [
+        [
+          {
+            "node": "Parse Tender JSON",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Tender JSON": {
+      "main": [
+        [
+          {
+            "node": "In-Zone Gate",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "In-Zone Gate": {
+      "main": [
+        [
+          {
+            "node": "In Zone?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "In Zone?": {
+      "main": [
+        [
+          {
+            "node": "Write Bid Draft",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Build Rejection Rows",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenRouter Chat Model1": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Write Bid Draft",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Write Bid Draft": {
+      "main": [
+        [
+          {
+            "node": "Attach Draft",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Attach Draft": {
+      "main": [
+        [
+          {
+            "node": "Format for Sheets",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format for Sheets": {
+      "main": [
+        [
+          {
+            "node": "Google Sheets",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "High Priority?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "High Priority?": {
+      "main": [
+        [
+          {
+            "node": "Slack - New Tender",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Rejection Rows": {
+      "main": [
+        [
+          {
+            "node": "Log Rejected",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Pipeline Rows": {
+      "main": [
+        [
+          {
+            "node": "Log Pipeline Watch",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {},
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "74525d77094878c8cbd9cb45a42b56910d34ea5065046e05f07447a7ea8ef173"
+  }
+}

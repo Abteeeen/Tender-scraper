@@ -1,0 +1,31 @@
+{
+  "actorSpecification": 1,
+  "name": "tender-radar-vendorpanel-robot",
+  "title": "Tender Radar — VendorPanel document robot",
+  "description": "Fetches tender packs for approved VendorPanel tenders, uploads them to Google Drive, and writes the link back to the triage sheet.",
+  "version": "1.0",
+  "meta": { "templateId": "js-playwright" },
+  "input": "./input_schema.json",
+  "dockerfile": "../Dockerfile",
+  "storages": {
+    "dataset": {
+      "actorSpecification": 1,
+      "title": "Fetch results",
+      "views": {
+        "overview": {
+          "title": "Overview",
+          "transformation": { "fields": ["title", "status", "driveUrl", "link"] },
+          "display": {
+            "component": "table",
+            "properties": {
+              "title": { "label": "Tender" },
+              "status": { "label": "Status" },
+              "driveUrl": { "label": "Drive link" },
+              "link": { "label": "Portal link" }
+            }
+          }
+        }
+      }
+    }
+  }
+}

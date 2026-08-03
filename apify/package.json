@@ -1,0 +1,16 @@
+{
+  "name": "tender-radar-vendorpanel-robot",
+  "version": "1.0.0",
+  "type": "module",
+  "private": true,
+  "description": "Apify actor that downloads approved VendorPanel tender packs and writes the Drive link back to the triage sheet.",
+  "main": "main.mjs",
+  "scripts": {
+    "start": "node main.mjs"
+  },
+  "dependencies": {
+    "apify": "^3.2.6",
+    "googleapis": "^144.0.0",
+    "playwright": "^1.48.0"
+  }
+}

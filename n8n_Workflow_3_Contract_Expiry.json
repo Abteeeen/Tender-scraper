@@ -1,0 +1,465 @@
+{
+  "name": "Tender Radar — Contract Expiry Tracker (v1)",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "weeks",
+              "triggerAtDay": [
+                1
+              ],
+              "triggerAtHour": 6
+            }
+          ]
+        }
+      },
+      "id": "x0001-cexp-4a10-9a10-tenderradar",
+      "name": "Weekly Trigger",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1,
+      "position": [
+        -400,
+        400
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// AusTender OCDS wants an ISO-8601 date interval. Look back 8 days so a\n// missed run is picked up next week rather than lost.\nconst end = new Date();\nconst start = new Date(end.getTime() - 8 * 86400000);\nconst iso = (d) => d.toISOString().slice(0, 10);\nreturn [{ json: { start: iso(start), end: iso(end), range: iso(start) + 'T00%3A00%3A00Z%2F' + iso(end) + 'T23%3A59%3A59Z' } }];"
+      },
+      "id": "x0002-cexp-4a10-9a10-tenderradar",
+      "name": "Build Date Range",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -180,
+        400
+      ]
+    },
+    {
+      "parameters": {
+        "url": "=https://api.tenders.gov.au/ocds/findByDates/contractPublished/{{ $json.range }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "User-Agent",
+              "value": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+            },
+            {
+              "name": "Authorization",
+              "value": "REPLACE_WITH_AUSTENDER_API_TOKEN"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true
+            }
+          }
+        }
+      },
+      "id": "x0003-cexp-4a10-9a10-tenderradar",
+      "name": "Fetch Contract Notices",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [
+        60,
+        400
+      ],
+      "onError": "continueRegularOutput",
+      "notes": "AusTender OCDS API requires an access token — request one from tenders.gov.au and put it in the Authorization header (ideally via an n8n credential, not inline)."
+    },
+    {
+      "parameters": {
+        "jsCode": "// Flatten OCDS release packages into one item per contract.\nconst out = [];\nfor (const it of $input.all()) {\n  const pkg = it.json || {};\n  const releases = pkg.releases || pkg.data?.releases || [];\n  for (const r of releases) {\n    const awards = r.awards || [];\n    const contracts = r.contracts || [];\n    const buyer = r.buyer?.name || r.parties?.find((p) => (p.roles || []).includes('buyer'))?.name || '';\n    const list = contracts.length ? contracts : awards;\n    for (const c of list) {\n      const supplier = (c.suppliers && c.suppliers[0]?.name)\n        || (awards[0]?.suppliers && awards[0].suppliers[0]?.name) || '';\n      const period = c.period || awards[0]?.period || {};\n      out.push({ json: {\n        cn_id: c.id || r.ocid || '',\n        title: c.title || r.tender?.title || '',\n        description: c.description || r.tender?.description || '',\n        buyer,\n        supplier,\n        value: c.value?.amount || awards[0]?.value?.amount || '',\n        currency: c.value?.currency || 'AUD',\n        start_date: (period.startDate || '').slice(0, 10),\n        end_date: (period.endDate || '').slice(0, 10),\n        published: (r.date || '').slice(0, 10),\n        category: r.tender?.mainProcurementCategory || '',\n        blob: ((c.title || '') + ' ' + (c.description || '') + ' ' + (r.tender?.title || '') + ' ' + buyer).toLowerCase()\n      }});\n    }\n  }\n}\nreturn out;"
+      },
+      "id": "x0004-cexp-4a10-9a10-tenderradar",
+      "name": "Extract Contracts",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        280,
+        400
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Keep only cleaning / security service contracts in or serviceable from SEQ.\nconst SERVICE = /\\b(cleaning|cleaner|janitor|janitorial|housekeeping|custodial|security guard|security service|security officer|guarding|manned guarding|static guard|patrol|concierge|cctv|surveillance|access control|alarm monitoring)\\b/i;\nconst NEG = /\\b(cyber ?security|information security|it security|data security|biosecurity|food security|national security)\\b/i;\nconst SEQ = /\\b(brisbane|gold coast|logan|ipswich|redland|moreton|caboolture|beenleigh|springfield|cleveland|wynnum|chermside|carrara|southport|robina|nerang|coomera|strathpine|queensland|qld)\\b/i;\n\nreturn $input.all().filter((it) => {\n  const b = it.json.blob || '';\n  if (NEG.test(b)) return false;\n  if (!SERVICE.test(b)) return false;\n  return SEQ.test(b);\n});"
+      },
+      "id": "x0005-cexp-4a10-9a10-tenderradar",
+      "name": "Filter Cleaning & Security",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        500,
+        400
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Work out when each contract runs out and how much warning is left.\nconst today = new Date();\nconst ts = new Date().toLocaleString('en-AU', { timeZone: 'Australia/Brisbane' });\nreturn $input.all().map((it) => {\n  const j = it.json;\n  const end = j.end_date ? new Date(j.end_date) : null;\n  let daysLeft = '', monthsLeft = '', window = '';\n  if (end && !isNaN(end)) {\n    daysLeft = Math.round((end - today) / 86400000);\n    monthsLeft = Math.round(daysLeft / 30.4);\n    if (daysLeft < 0) window = 'Expired';\n    else if (daysLeft <= 270 && daysLeft >= 150) window = 'ACT NOW (6-9 months out)';\n    else if (daysLeft < 150) window = 'Late — tender likely already out';\n    else window = 'Watch';\n  }\n  return { json: {\n    Logged: ts,\n    ContractID: j.cn_id,\n    Title: j.title,\n    Buyer: j.buyer,\n    Incumbent: j.supplier,\n    Value: j.value,\n    StartDate: j.start_date,\n    EndDate: j.end_date,\n    DaysToExpiry: daysLeft,\n    MonthsToExpiry: monthsLeft,\n    Window: window,\n    Published: j.published,\n    Notes: (j.description || '').toString().slice(0, 400)\n  }};\n});"
+      },
+      "id": "x0006-cexp-4a10-9a10-tenderradar",
+      "name": "Compute Expiry",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        720,
+        400
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "1YrekkkB-YjNAhWA1A-VYMxCcEl8A-UB5d627_zx7fEY",
+          "mode": "list",
+          "cachedResultName": "Tender sheets "
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Contracts",
+          "mode": "name",
+          "cachedResultName": "Contracts"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Logged": "={{ $json.Logged }}",
+            "ContractID": "={{ $json.ContractID }}",
+            "Title": "={{ $json.Title }}",
+            "Buyer": "={{ $json.Buyer }}",
+            "Incumbent": "={{ $json.Incumbent }}",
+            "Value": "={{ $json.Value }}",
+            "StartDate": "={{ $json.StartDate }}",
+            "EndDate": "={{ $json.EndDate }}",
+            "DaysToExpiry": "={{ $json.DaysToExpiry }}",
+            "MonthsToExpiry": "={{ $json.MonthsToExpiry }}",
+            "Window": "={{ $json.Window }}",
+            "Published": "={{ $json.Published }}",
+            "Notes": "={{ $json.Notes }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "Logged",
+              "displayName": "Logged",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "ContractID",
+              "displayName": "ContractID",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Title",
+              "displayName": "Title",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Buyer",
+              "displayName": "Buyer",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Incumbent",
+              "displayName": "Incumbent",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Value",
+              "displayName": "Value",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "StartDate",
+              "displayName": "StartDate",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "EndDate",
+              "displayName": "EndDate",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "DaysToExpiry",
+              "displayName": "DaysToExpiry",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "MonthsToExpiry",
+              "displayName": "MonthsToExpiry",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Window",
+              "displayName": "Window",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Published",
+              "displayName": "Published",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Notes",
+              "displayName": "Notes",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": true
+        },
+        "options": {}
+      },
+      "id": "x0007-cexp-4a10-9a10-tenderradar",
+      "name": "Append to Contracts Tab",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.2,
+      "position": [
+        940,
+        400
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "HLZxRgOR9Y2XBrnV",
+          "name": "Sheets permission(14/07/2026)"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "1YrekkkB-YjNAhWA1A-VYMxCcEl8A-UB5d627_zx7fEY",
+          "mode": "list",
+          "cachedResultName": "Tender sheets "
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Contracts",
+          "mode": "name",
+          "cachedResultName": "Contracts"
+        },
+        "options": {}
+      },
+      "id": "x0008-cexp-4a10-9a10-tenderradar",
+      "name": "Read Contracts Tab",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.2,
+      "position": [
+        280,
+        700
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "HLZxRgOR9Y2XBrnV",
+          "name": "Sheets permission(14/07/2026)"
+        }
+      },
+      "alwaysOutputData": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Anything expiring in the 6-9 month sweet spot, not already flagged.\nconst today = new Date();\nreturn $input.all().filter((it) => {\n  const j = it.json;\n  if ((j.Alerted || '').toString().trim().toLowerCase() === 'yes') return false;\n  const end = j.EndDate ? new Date(j.EndDate) : null;\n  if (!end || isNaN(end)) return false;\n  const days = Math.round((end - today) / 86400000);\n  return days >= 150 && days <= 270;\n}).map((it) => ({ json: it.json }));"
+      },
+      "id": "x0009-cexp-4a10-9a10-tenderradar",
+      "name": "Due for Outreach",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        500,
+        700
+      ]
+    },
+    {
+      "parameters": {
+        "select": "channel",
+        "channelId": {
+          "__rl": true,
+          "value": "C0B6K8652GM",
+          "mode": "list",
+          "cachedResultName": "hermes-testing"
+        },
+        "text": "=:hourglass_flowing_sand: *Contract expiring — time to make contact*\\n\\n*{{ $json.Title }}*\\n:office: Buyer: {{ $json.Buyer }}\\n:busts_in_silhouette: Incumbent: {{ $json.Incumbent }}\\n:moneybag: Value: {{ $json.Value }}\\n:calendar: Ends {{ $json.EndDate }} — about {{ $json.MonthsToExpiry }} months away\\n\\nThis usually goes to market 3-6 months before expiry. Start the buyer conversation now, before the tender exists.",
+        "otherOptions": {}
+      },
+      "id": "x0010-cexp-4a10-9a10-tenderradar",
+      "name": "Slack - Contract Expiring",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.2,
+      "position": [
+        720,
+        700
+      ],
+      "credentials": {
+        "slackApi": {
+          "id": "wBwfpnkQv3zlsz8V",
+          "name": "n8n BOT "
+        }
+      },
+      "webhookId": "c3508ce0-expiry-4f04-876c-contractwarn"
+    }
+  ],
+  "connections": {
+    "Weekly Trigger": {
+      "main": [
+        [
+          {
+            "node": "Build Date Range",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Read Contracts Tab",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Date Range": {
+      "main": [
+        [
+          {
+            "node": "Fetch Contract Notices",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch Contract Notices": {
+      "main": [
+        [
+          {
+            "node": "Extract Contracts",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract Contracts": {
+      "main": [
+        [
+          {
+            "node": "Filter Cleaning & Security",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Filter Cleaning & Security": {
+      "main": [
+        [
+          {
+            "node": "Compute Expiry",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Compute Expiry": {
+      "main": [
+        [
+          {
+            "node": "Append to Contracts Tab",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read Contracts Tab": {
+      "main": [
+        [
+          {
+            "node": "Due for Outreach",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Due for Outreach": {
+      "main": [
+        [
+          {
+            "node": "Slack - Contract Expiring",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {},
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "74525d77094878c8cbd9cb45a42b56910d34ea5065046e05f07447a7ea8ef173"
+  }
+}
