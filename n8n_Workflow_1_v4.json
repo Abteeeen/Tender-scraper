@@ -584,7 +584,7 @@
           "mode": "list",
           "cachedResultName": "hermes-testing"
         },
-        "text": "=:warning: *Tender radar — source returned nothing*\\n\\nNo rows from: *{{ $json.missingList }}*\\n\\nThis usually means the page changed or the feed is down. Counts this run:\\n{{ $json.summary }}",
+        "text": "=:warning: *Tender radar — source returned nothing*\n\nNo rows from: *{{ $json.missingList }}*\n\nThis usually means the page changed or the feed is down. Counts this run:\n{{ $json.summary }}",
         "otherOptions": {}
       },
       "id": "n-0031-4a10-9a10-tenderradar",
@@ -1207,7 +1207,7 @@
           "mode": "list",
           "cachedResultName": "hermes-testing"
         },
-        "text": "=:mega: *New tender — Tier {{ $json.Tier }} ({{ $json.Service }})* {{ $json.IsPanel }}\\n\\n*{{ $json.Title }}*\\n:round_pushpin: {{ $json.Location }}  |  {{ $json.Region }}\\n:alarm_clock: Closes: {{ $json.Deadline }}  ({{ $json.DaysToClose }} days)\\n:office: {{ $json.BuyerOrg }}\\n:telephone_receiver: {{ $json.ContactName }} {{ $json.ContactEmail }} {{ $json.ContactPhone }}\\n:satellite: Source: {{ $json.Source }}\\n\\n{{ $json.Summary }}\\n\\nApprove in the sheet, then paste the DocumentLink.\\n{{ $json.Link }}",
+        "text": "=:mega: *New tender — Tier {{ $json.Tier }} ({{ $json.Service }})* {{ $json.IsPanel }}\n\n*{{ $json.Title }}*\n:round_pushpin: {{ $json.Location }}  |  {{ $json.Region }}\n:alarm_clock: Closes: {{ $json.Deadline }}  ({{ $json.DaysToClose }} days)\n:office: {{ $json.BuyerOrg }}\n:telephone_receiver: {{ $json.ContactName }} {{ $json.ContactEmail }} {{ $json.ContactPhone }}\n:satellite: Source: {{ $json.Source }}\n\n{{ $json.Summary }}\n\nApprove in the sheet, then paste the DocumentLink.\n{{ $json.Link }}",
         "otherOptions": {}
       },
       "id": "n-0044-4a10-9a10-tenderradar",
