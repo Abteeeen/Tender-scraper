@@ -331,7 +331,7 @@
     },
     {
       "parameters": {
-        "jsCode": "// Brisbane City Council publishes TWO mirrored tables (one without links) and\n// TWO lists: open tenders (\"Close date\") and a forward schedule (\"Release date\").\n// Keep the linked copy of each, and tag which list it came from.\nconst BASE = 'https://www.brisbane.qld.gov.au';\nconst LANDING = BASE + '/business/council-tenders-and-market-led-proposals/current-tenders';\n\nconst rows = [];\nfor (const it of $input.all()) {\n  const html = (it.json.rows || '').toString();\n  const a = html.match(/<a[^>]*href=[\"']([^\"']+)[\"'][^>]*>([\\s\\S]*?)<\\/a>/i);\n  const href = a ? a[1] : '';\n  let title = a ? a[2].replace(/<[^>]+>/g, ' ').replace(/&nbsp;/gi, ' ').replace(/&amp;/gi, '&').replace(/\\s+/g, ' ').trim() : '';\n  const rowText = html.replace(/<[^>]+>/g, ' ').replace(/&nbsp;/gi, ' ').replace(/&amp;/gi, '&').replace(/\\s+/g, ' ').trim();\n  if (rowText.length < 20) continue;\n  if (/^(title and description|tender|closing|status|reference|number)\\b/i.test(rowText)) continue;\n\n  const isMailto = /mailto:/i.test(href);\n  let link = LANDING;\n  if (href && !isMailto) link = /^https?:/i.test(href) ? href : BASE + (href.startsWith('/') ? '' : '/') + href;\n\n  if (!title || /^email contact$/i.test(title) || /^https?:/i.test(title)) {\n    title = rowText.split(/\\s+(?:Council is seeking|RFx)/i)[0].slice(0, 140).trim() || rowText.slice(0, 140);\n  }\n\n  const upcoming = /release date/i.test(rowText) && !/close date/i.test(rowText);\n  const closed = /\\bclosed\\b\\s*$/i.test(rowText);\n  const ref = (rowText.match(/\\b(Doc\\d+|CW\\d+|CON\\d+|CN\\d+|TEN\\d+)\\b/i) || [])[0] || '';\n\n  rows.push({\n    key: (ref || title.slice(0, 80)).toLowerCase(),\n    hasLink: !!(href && isMailto) || (!!href && !isMailto),\n    ariba: isMailto ? href.replace(/^[^]*?mailto:/i, 'mailto:').split('?')[0] : '',\n    json: {\n      title, link, guid: 'BCC:' + (ref || title.slice(0, 90)),\n      posted_raw: '', source: 'Brisbane City Council',\n      ref, text: rowText, search_blob: rowText.toLowerCase(),\n      _bcc_upcoming: upcoming, _bcc_closed: closed,\n      ariba_request: isMailto ? href.replace(/^[^]*?mailto:/i, 'mailto:').split('?')[0] : ''\n    }\n  });\n}\n\n// collapse the mirrored tables, preferring the copy that carries the Ariba link\nconst best = new Map();\nfor (const r of rows) {\n  const prev = best.get(r.key);\n  if (!prev || (!prev.hasLink && r.hasLink)) best.set(r.key, r);\n}\nreturn Array.from(best.values()).filter((r) => !r.json._bcc_closed).map((r) => ({ json: r.json }));"
+        "jsCode": "// Brisbane City Council publishes TWO mirrored tables (one without links) and\n// TWO lists: open tenders (\"Close date\") and a forward schedule (\"Release date\").\n// Keep the linked copy of each, and tag which list it came from.\nconst BASE = 'https://www.brisbane.qld.gov.au';\nconst LANDING = BASE + '/business/council-tenders-and-market-led-proposals/current-tenders';\n\nconst rows = [];\nfor (const it of $input.all()) {\n  const html = (it.json.rows || '').toString();\n  const a = html.match(/<a[^>]*href=[\"']([^\"']+)[\"'][^>]*>([\\s\\S]*?)<\\/a>/i);\n  const href = a ? a[1] : '';\n  let title = a ? a[2].replace(/<[^>]+>/g, ' ').replace(/&nbsp;/gi, ' ').replace(/&amp;/gi, '&').replace(/\\s+/g, ' ').trim() : '';\n  const rowText = html.replace(/<[^>]+>/g, ' ').replace(/&nbsp;/gi, ' ').replace(/&amp;/gi, '&').replace(/\\s+/g, ' ').trim();\n  if (rowText.length < 20) continue;\n  if (/^(title and description|tender|closing|status|reference|number)\\b/i.test(rowText)) continue;\n\n  const isMailto = /mailto:/i.test(href);\n  let link = LANDING;\n  if (href && !isMailto) link = /^https?:/i.test(href) ? href : BASE + (href.startsWith('/') ? '' : '/') + href;\n\n  if (!title || /^email contact$/i.test(title) || /^https?:/i.test(title)) {\n    title = rowText.split(/\\s+(?:Council is seeking|RFx)/i)[0].slice(0, 140).trim() || rowText.slice(0, 140);\n  }\n\n  // BCC prints its fields inline in a predictable order — lift them out so the\n  // client sees category, type, close date and contact without opening Ariba.\n  const grab = (label, stop) => {\n    const m = rowText.match(new RegExp(label + '\\s*:?\\s*([^]*?)(?=' + stop + '|$)', 'i'));\n    return m ? m[1].replace(/\\s+/g, ' ').trim() : '';\n  };\n  const bccCategory = grab('Category', 'Tender type|Release date|Close date|Contact');\n  const bccType     = grab('Tender type', 'Close date|Release date|Contact');\n  const bccClose    = grab('Close date', 'Contact|$');\n  const bccContact  = grab('Contact', '$');\n\n  const upcoming = /release date/i.test(rowText) && !/close date/i.test(rowText);\n  const closed = /\\bclosed\\b\\s*$/i.test(rowText);\n  const ref = (rowText.match(/\\b(Doc\\d+|CW\\d+|CON\\d+|CN\\d+|TEN\\d+)\\b/i) || [])[0] || '';\n\n  rows.push({\n    key: (ref || title.slice(0, 80)).toLowerCase(),\n    hasLink: !!(href && isMailto) || (!!href && !isMailto),\n    ariba: isMailto ? href.replace(/^[^]*?mailto:/i, 'mailto:').split('?')[0] : '',\n    json: {\n      title, link, guid: 'BCC:' + (ref || title.slice(0, 90)),\n      posted_raw: '', source: 'Brisbane City Council',\n      ref, text: rowText, search_blob: rowText.toLowerCase(),\n      _bcc_upcoming: upcoming, _bcc_closed: closed,\n      bcc_category: bccCategory, bcc_type: bccType,\n      bcc_close: bccClose, bcc_contact: bccContact,\n      ariba_request: isMailto ? href.replace(/^[^]*?mailto:/i, 'mailto:').split('?')[0] : ''\n    }\n  });\n}\n\n// collapse the mirrored tables, preferring the copy that carries the Ariba link\nconst best = new Map();\nfor (const r of rows) {\n  const prev = best.get(r.key);\n  if (!prev || (!prev.hasLink && r.hasLink)) best.set(r.key, r);\n}\nreturn Array.from(best.values()).filter((r) => !r.json._bcc_closed).map((r) => ({ json: r.json }));"
       },
       "id": "n-0019-4a10-9a10-tenderradar",
       "name": "Normalize (BCC)",
@@ -655,7 +655,7 @@
     {
       "parameters": {
         "mode": "runOnceForEachItem",
-        "jsCode": "let raw = ($json.text || '').toString().replace(/```json/gi, '').replace(/```/g, '').trim();\nlet parsed;\ntry { parsed = JSON.parse(raw); } catch (e) { parsed = { tier: 'Reject', parse_error: true }; }\nconst meta = $('Dedupe vs Sheet').item.json;\nreturn { json: {\n  RowID: meta.RowID, title: meta.title, link: meta.link, source: meta.source,\n  posted_raw: meta.posted_raw, ariba_request: meta.ariba_request || '',\n  ...parsed\n} };"
+        "jsCode": "let raw = ($json.text || '').toString().replace(/```json/gi, '').replace(/```/g, '').trim();\nlet parsed;\ntry { parsed = JSON.parse(raw); } catch (e) { parsed = { tier: 'Reject', parse_error: true }; }\nconst meta = $('Dedupe vs Sheet').item.json;\nreturn { json: {\n  RowID: meta.RowID, title: meta.title, link: meta.link, source: meta.source,\n  posted_raw: meta.posted_raw, ariba_request: meta.ariba_request || '',\n  ref: meta.ref || '',\n  source_text: (meta.text || '').toString(),\n  ...parsed\n} };"
       },
       "id": "n-0035-4a10-9a10-tenderradar",
       "name": "Parse Tender JSON",
@@ -764,7 +764,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const fmt = (d) => { try { const x = new Date(d); return isNaN(x) ? '' : x.toLocaleDateString('en-AU', { timeZone: 'Australia/Brisbane' }); } catch (e) { return ''; } };\nconst capturedTs = new Date().toLocaleString('en-AU', { timeZone: 'Australia/Brisbane' });\nconst today = new Date();\nreturn $input.all().map((it) => {\n  const j = it.json;\n  const close = j.close_date_iso ? new Date(j.close_date_iso) : null;\n  const daysToClose = (close && !isNaN(close)) ? Math.round((close - today) / 86400000) : '';\n  return { json: {\n    RowID: j.RowID || (j.guid || j.link || j.title || '').toString().slice(0, 180),\n    Captured: capturedTs,\n    HumanApproval: 'Pending',\n    DocumentLink: '',\n    Tier: j.tier || '',\n    IsPanel: j.is_panel ? 'PANEL' : '',\n    Service: j.service_type || '',\n    SecurityType: j.security_type || '',\n    Title: j.title || '',\n    Location: j.location_text || '',\n    Region: j.region || '',\n    State: j.state || '',\n    Budget: j.budget_value || '',\n    ContractDuration: j.contract_duration || '',\n    WorkHours: j.work_hours_per_week || '',\n    Posted: j.posted_raw ? fmt(j.posted_raw) : '',\n    Deadline: j.deadline || '',\n    DaysToClose: daysToClose,\n    RedFlags: j.red_flags || '',\n    Summary: j.summary || '',\n    BuyerOrg: j.buyer_org || '',\n    ContactName: j.contact_name || '',\n    ContactRole: j.contact_role || '',\n    ContactEmail: j.contact_email || '',\n    ContactPhone: j.contact_phone || '',\n    BidDraft: j.bid_draft || '',\n    Source: j.source || '',\n    Link: j.link || '',\n    AribaRequest: j.ariba_request || ''\n  }};\n});"
+        "jsCode": "const fmt = (d) => { try { const x = new Date(d); return isNaN(x) ? '' : x.toLocaleDateString('en-AU', { timeZone: 'Australia/Brisbane' }); } catch (e) { return ''; } };\nconst capturedTs = new Date().toLocaleString('en-AU', { timeZone: 'Australia/Brisbane' });\nconst today = new Date();\nreturn $input.all().map((it) => {\n  const j = it.json;\n  const close = j.close_date_iso ? new Date(j.close_date_iso) : null;\n  const daysToClose = (close && !isNaN(close)) ? Math.round((close - today) / 86400000) : '';\n  return { json: {\n    RowID: j.RowID || (j.guid || j.link || j.title || '').toString().slice(0, 180),\n    Captured: capturedTs,\n    HumanApproval: 'Pending',\n    DocumentLink: '',\n    Tier: j.tier || '',\n    IsPanel: j.is_panel ? 'PANEL' : '',\n    Service: j.service_type || '',\n    SecurityType: j.security_type || '',\n    Title: j.title || '',\n    Location: j.location_text || '',\n    Region: j.region || '',\n    State: j.state || '',\n    Budget: j.budget_value || '',\n    ContractDuration: j.contract_duration || '',\n    WorkHours: j.work_hours_per_week || '',\n    Posted: j.posted_raw ? fmt(j.posted_raw) : '',\n    Deadline: j.deadline || '',\n    DaysToClose: daysToClose,\n    RedFlags: j.red_flags || '',\n    Summary: j.summary || '',\n    BuyerOrg: j.buyer_org || '',\n    ContactName: j.contact_name || '',\n    ContactRole: j.contact_role || '',\n    ContactEmail: j.contact_email || '',\n    ContactPhone: j.contact_phone || '',\n    BidDraft: j.bid_draft || '',\n    Source: j.source || '',\n    Link: j.link || '',\n    AribaRequest: j.ariba_request || '',\n    Ref: j.ref || '',\n    Details: (j.source_text || '')\n      .toString()\n      .replace(/s+/g, ' ')\n      .trim()\n      .slice(0, 3000)\n  }};\n});"
       },
       "id": "n-0041-4a10-9a10-tenderradar",
       "name": "Format for Sheets",
@@ -821,7 +821,9 @@
             "BidDraft": "={{ $json.BidDraft }}",
             "Source": "={{ $json.Source }}",
             "Link": "={{ $json.Link }}",
-            "AribaRequest": "={{ $json.AribaRequest }}"
+            "AribaRequest": "={{ $json.AribaRequest }}",
+            "Ref": "={{ $json.Ref }}",
+            "Details": "={{ $json.Details }}"
           },
           "matchingColumns": [],
           "schema": [
@@ -1080,6 +1082,24 @@
             {
               "id": "AribaRequest",
               "displayName": "AribaRequest",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Ref",
+              "displayName": "Ref",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Details",
+              "displayName": "Details",
               "required": false,
               "defaultMatch": false,
               "display": true,
