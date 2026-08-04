@@ -378,6 +378,50 @@
     },
     {
       "parameters": {
+        "url": "https://etender.hpw.qld.gov.au/public/TendersListingCurrent.aspx",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "User-Agent",
+              "value": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "text",
+              "outputPropertyName": "data"
+            }
+          }
+        }
+      },
+      "id": "n-0021-4a10-9a10-tenderradar",
+      "name": "Fetch eTender QLD",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [
+        140,
+        900
+      ],
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "// eTender Queensland (QBuild / Housing & Public Works).\n// The page renders one block per tender, each starting with a\n// .tenderListItemHeaderNo cell, followed by 7 label/data pairs.\n// Mostly construction work — the classifier filters it — but QBuild does\n// occasionally list services here.\nconst BASE = 'https://etender.hpw.qld.gov.au/public/';\nconst html = ($json.data || $json.body || $json.pageHtml || '').toString();\n\nconst strip = (x) => (x || '').replace(/<[^>]+>/g, ' ')\n  .replace(/&nbsp;/gi, ' ').replace(/&amp;/gi, '&')\n  .replace(/&#39;|&rsquo;/g, \"'\").replace(/&quot;/g, '\"')\n  .replace(/\\s+/g, ' ').trim();\n\nconst marks = [];\nconst re = /class=\"tenderListItemHeaderNo\"/gi;\nlet m;\nwhile ((m = re.exec(html)) !== null) marks.push(m.index);\nif (!marks.length) return [];\n\nconst field = (block, label) => {\n  const r = new RegExp('tenderListItemLabel\"[^>]*>\\\\s*' + label +\n    '\\\\s*:?\\\\s*<\\\\/[^>]+>[\\\\s\\\\S]{0,200}?tenderListItemData\"[^>]*>([\\\\s\\\\S]*?)<\\\\/', 'i');\n  const x = block.match(r);\n  return x ? strip(x[1]) : '';\n};\n\nconst out = [];\nmarks.forEach((start, i) => {\n  const b = html.slice(start, marks[i + 1] !== undefined ? marks[i + 1] : html.length);\n  const ref = strip((b.match(/tenderListItemHeaderNo\"[^>]*>([\\s\\S]*?)<\\//i) || [])[1]);\n\n  // the title/description sits between the reference cell and the first label\n  const afterRef = b.slice(b.indexOf('</td>'));\n  const cut = afterRef.search(/tenderListMid|tenderListItemLabel/i);\n  // a stray unclosed tag can survive the strip - cut at any leftover '<'\n  const heading = strip(afterRef.slice(0, cut > 0 ? cut : 1500)).split('<')[0].trim();\n  if (!heading) return;\n\n  const category   = field(b, 'Category');\n  const region     = field(b, 'Regions');\n  const closeDate  = field(b, 'Close Date');\n  const electorate = field(b, 'State Electorates');\n  const councilArea = field(b, 'Local Authorities');\n\n  const a = b.match(/<a[^>]*href=\"([^\"]*TenderDetails[^\"]*)\"/i);\n  const link = a ? BASE + a[1].replace(/&amp;/gi, '&').replace(/^\\.?\\//, '') : BASE + 'TendersListingCurrent.aspx';\n\n  // heading format is \"SITE - Work type - description\"\n  const title = heading.split(' - ').slice(0, 2).join(' - ').slice(0, 160) || heading.slice(0, 160);\n\n  out.push({ json: {\n    title,\n    link,\n    guid: 'ETQ:' + (ref || title.slice(0, 90)),\n    posted_raw: '',\n    source: 'eTender QLD',\n    ref,\n    description: heading,\n    bcc_category: category,\n    text: [\n      heading,\n      ref ? 'Reference: ' + ref : '',\n      category ? 'Category: ' + category : '',\n      region ? 'Region: ' + region : '',\n      electorate ? 'State electorate: ' + electorate : '',\n      councilArea ? 'Local authority: ' + councilArea : '',\n      closeDate ? 'Close date: ' + closeDate : '',\n      'Buyer: Queensland Government (QBuild / Housing and Public Works)',\n      'State: QLD'\n    ].filter(Boolean).join('. '),\n    search_blob: (heading + ' ' + category + ' ' + region + ' ' + councilArea).toLowerCase()\n  }});\n});\nreturn out;"
+      },
+      "id": "n-0022-4a10-9a10-tenderradar",
+      "name": "Parse eTender QLD",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        420,
+        900
+      ]
+    },
+    {
+      "parameters": {
         "documentId": {
           "__rl": true,
           "value": "1YrekkkB-YjNAhWA1A-VYMxCcEl8A-UB5d627_zx7fEY",
@@ -392,13 +436,13 @@
         },
         "options": {}
       },
-      "id": "n-0021-4a10-9a10-tenderradar",
+      "id": "n-0023-4a10-9a10-tenderradar",
       "name": "Read Watchlist",
       "type": "n8n-nodes-base.googleSheets",
       "typeVersion": 4.2,
       "position": [
         140,
-        980
+        1060
       ],
       "credentials": {
         "googleSheetsOAuth2Api": {
@@ -414,13 +458,13 @@
       "parameters": {
         "jsCode": "// Sheet-driven watchlist: one row per site (SiteName | URL | Selector).\n// Adding a new council or university is a spreadsheet row, not a new node.\nconst KW = ['security','cleaning','cleaner','guard','patrol','janitor','custodial','concierge','cctv','surveillance','housekeeping'];\nconst out = [];\nfor (const row of $input.all()) {\n  const site = (row.json.SiteName || 'Watchlist').toString().trim();\n  const url = (row.json.URL || '').toString().trim();\n  if (!url || !/^https?:/i.test(url)) continue;\n  let html = '';\n  try {\n    const res = await this.helpers.httpRequest({ url, headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' }, timeout: 25000 });\n    html = (typeof res === 'string') ? res : JSON.stringify(res);\n  } catch (e) { continue; }\n  const om = url.match(/^https?:\\/\\/[^/]+/);\n  const origin = om ? om[0] : '';\n  const re = /<a[^>]*href=[\"']([^\"'#]+)[\"'][^>]*>([\\s\\S]*?)<\\/a>/gi;\n  let m; const seen = new Set();\n  while ((m = re.exec(html)) !== null) {\n    let link = m[1];\n    const title = m[2].replace(/<[^>]+>/g, ' ').replace(/&nbsp;/gi, ' ').replace(/&amp;/gi, '&').replace(/\\s+/g, ' ').trim();\n    if (title.length < 15) continue;\n    const blob = title.toLowerCase();\n    if (!KW.some((k) => blob.includes(k))) continue;\n    if (link.startsWith('/')) link = origin + link;\n    if (!/^https?:/i.test(link)) continue;\n    if (seen.has(link)) continue;\n    seen.add(link);\n    out.push({ json: { title, link, guid: 'WL:' + link, posted_raw: '', source: site, text: title, search_blob: blob } });\n  }\n}\nreturn out;"
       },
-      "id": "n-0022-4a10-9a10-tenderradar",
+      "id": "n-0024-4a10-9a10-tenderradar",
       "name": "Scrape Watchlist",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
         420,
-        980
+        1060
       ]
     },
     {
@@ -429,7 +473,7 @@
         "path": "tender-robot",
         "options": {}
       },
-      "id": "n-0023-4a10-9a10-tenderradar",
+      "id": "n-0025-4a10-9a10-tenderradar",
       "name": "Robot Push (Webhook)",
       "type": "n8n-nodes-base.webhook",
       "typeVersion": 2,
@@ -443,7 +487,7 @@
       "parameters": {
         "jsCode": "// Items pushed in by the Apify / Playwright robot (or any external fetcher).\n// Expected shape: title, link, guid, source, text.\nconst body = $input.first().json;\nconst arr = Array.isArray(body) ? body : (Array.isArray(body.body) ? body.body : [body]);\nreturn arr.filter(Boolean).map((j) => {\n  const title = (j.title || '').toString();\n  const text = (j.text || title).toString();\n  return { json: {\n    title, link: j.link || '', guid: j.guid || ('PUSH:' + (j.link || title)),\n    posted_raw: j.posted_raw || '', source: j.source || 'Robot',\n    text, search_blob: (j.search_blob || (title + ' ' + text)).toLowerCase()\n  }};\n});"
       },
-      "id": "n-0024-4a10-9a10-tenderradar",
+      "id": "n-0026-4a10-9a10-tenderradar",
       "name": "Normalize (Robot)",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
@@ -457,7 +501,7 @@
         "format": "simple",
         "options": {}
       },
-      "id": "n-0025-4a10-9a10-tenderradar",
+      "id": "n-0027-4a10-9a10-tenderradar",
       "name": "Tender Inbox (IMAP)",
       "type": "n8n-nodes-base.emailReadImap",
       "typeVersion": 2,
@@ -472,7 +516,7 @@
       "parameters": {
         "jsCode": "return $input.all().map((it) => {\n  const j = it.json;\n  const subject = (j.subject || '').toString();\n  const body = (j.textPlain || j.textHtml || j.text || '').toString().replace(/<[^>]+>/g, ' ').replace(/\\s+/g, ' ').trim();\n  const linkM = body.match(/https?:\\/\\/[^\\s\"'<>]+/);\n  return { json: {\n    title: subject,\n    link: linkM ? linkM[0] : '',\n    guid: 'MAIL:' + (j.messageId || subject).toString().slice(0, 120),\n    posted_raw: j.date || '',\n    source: 'Tender Inbox',\n    text: (subject + ' \\u2014 ' + body).slice(0, 6000),\n    search_blob: (subject + ' ' + body).toLowerCase()\n  }};\n});"
       },
-      "id": "n-0026-4a10-9a10-tenderradar",
+      "id": "n-0028-4a10-9a10-tenderradar",
       "name": "Normalize (Email)",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
@@ -485,7 +529,7 @@
       "parameters": {
         "jsCode": "// === RELEVANCE CLASSIFIER (all sources) ===\n// Tags every item _keep / _drop_reason. Nothing is discarded here so the\n// rejection log can record what we dropped and why.\nconst NEG = /\\b(biosecurity|cyber ?security|information security|info security|it security|data security|food security|national security|network security)\\b/i;\n\nconst STRONG = /\\b(cleaning|cleaner|janitor|janitorial|housekeeping|custodial|hygiene services|guard|guarding|security guard|security service|security officer|manned guarding|static guard|crowd control|mobile patrol|patrol|concierge|cctv|surveillance|access control|alarm response|alarm monitoring|loss prevention|gatehouse)\\b/i;\n\nconst CLEAN_BAD = /\\b(hull|street sweep|drain|pipe|duct|tank|dry clean|desludg)\\b/i;\nconst FACIL = /\\bfacilit(?:y|ies) (?:management|manager|cleaning|maintenance|services)\\b/i;\nconst CAT_GOOD = /(security services|cleaning services|security & monitoring|building cleaning)/i;\n\nconst OTHER = /\\b(construction|demolition|demolish|refurbish\\w*|redevelopment|design and construct|design & construct|building works|amenities building|change ?room|swimming pool|aquatic centre|landfill|kerbside|waste collection|recycl\\w+|pavement|road upgrade|intersection|switchboard|hvac|air ?condition\\w*|solar|lift (replacement|maintenance)|childcare|long day care|graphic design|physiotherapy|aquaponics|tree pruning|weed spraying|planning scheme|irrigation|generator maintenance)\\b/i;\n\nconst catText = (t) => { const m = (t || '').toLowerCase().match(/tender categories\\s*:\\s*([^]*?)(specification docs|$)/); return m ? m[1] : ''; };\n\nreturn $input.all().map((it) => {\n  const j = it.json;\n  const title = (j.title || '').toString();\n  const blob  = (j.search_blob || j.text || '').toString().toLowerCase();\n  const cats  = catText((j.text || '').toString());\n\n  let keep = false, reason = '';\n\n  if (NEG.test(blob)) { reason = 'cyber/bio-security, not physical security'; }\n  else if (STRONG.test(title) && !(CLEAN_BAD.test(title) && !/\\b(guard|security|cctv|patrol)\\b/i.test(title))) { keep = true; }\n  else if (FACIL.test(title)) { keep = true; }\n  else if (OTHER.test(blob)) { reason = 'construction / other trade, not a security or cleaning service'; }\n  else if (CAT_GOOD.test(cats)) { keep = true; }\n  else if (STRONG.test(blob)) { keep = true; }\n  else { reason = 'no security or cleaning service term found'; }\n\n  j._keep = keep;\n  j._drop_reason = reason;\n  j._stage = 'keyword';\n  return { json: j };\n});"
       },
-      "id": "n-0027-4a10-9a10-tenderradar",
+      "id": "n-0029-4a10-9a10-tenderradar",
       "name": "Classify Relevance",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
@@ -519,7 +563,7 @@
         },
         "options": {}
       },
-      "id": "n-0028-4a10-9a10-tenderradar",
+      "id": "n-0030-4a10-9a10-tenderradar",
       "name": "Relevant?",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2,
@@ -532,7 +576,7 @@
       "parameters": {
         "jsCode": "// Alerts if a source that should always return rows returned none —\n// catches silent scrape breakage, which otherwise looks like a quiet week.\nconst EXPECTED = ['AusTender', 'VendorPanel', 'Brisbane City Council'];\nconst counts = {};\nfor (const it of $input.all()) {\n  const s = (it.json.source || 'unknown').toString();\n  counts[s] = (counts[s] || 0) + 1;\n}\nconst missing = EXPECTED.filter((s) => !counts[s]);\nconst summary = Object.entries(counts).map(([k, v]) => k + ': ' + v).join('  |  ') || 'nothing returned by any source';\nreturn [{ json: { counts, missing, unhealthy: missing.length > 0, summary, missingList: missing.join(', ') } }];"
       },
-      "id": "n-0029-4a10-9a10-tenderradar",
+      "id": "n-0031-4a10-9a10-tenderradar",
       "name": "Source Health Check",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
@@ -566,7 +610,7 @@
         },
         "options": {}
       },
-      "id": "n-0030-4a10-9a10-tenderradar",
+      "id": "n-0032-4a10-9a10-tenderradar",
       "name": "Any Source Down?",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2,
@@ -587,7 +631,7 @@
         "text": "=:warning: *Tender radar — source returned nothing*\n\nNo rows from: *{{ $json.missingList }}*\n\nThis usually means the page changed or the feed is down. Counts this run:\n{{ $json.summary }}",
         "otherOptions": {}
       },
-      "id": "n-0031-4a10-9a10-tenderradar",
+      "id": "n-0033-4a10-9a10-tenderradar",
       "name": "Slack - Source Down",
       "type": "n8n-nodes-base.slack",
       "typeVersion": 2.2,
@@ -607,7 +651,7 @@
       "parameters": {
         "jsCode": "// Dedupe against the RowIDs already in the sheet (survives re-imports and\n// manual runs, unlike workflow static data) plus within this batch.\nlet seen = new Set();\ntry { seen = new Set(($('Collect Seen IDs').first().json.seen) || []); } catch (e) {}\nconst batch = new Set();\nconst out = [];\nfor (const it of $input.all()) {\n  const j = it.json;\n  const id = (j.guid || j.link || j.title || '').toString().slice(0, 180).replace(/[\\t\\n]/g, ' ');\n  if (!id) continue;\n  if (seen.has(id) || batch.has(id)) continue;\n  batch.add(id);\n  j.RowID = id;\n  out.push({ json: j });\n}\nreturn out;"
       },
-      "id": "n-0032-4a10-9a10-tenderradar",
+      "id": "n-0034-4a10-9a10-tenderradar",
       "name": "Dedupe vs Sheet",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
@@ -620,7 +664,7 @@
       "parameters": {
         "prompt": "=You are a tender analyst for a SECURITY (manpower guarding + electronic/CCTV) and COMMERCIAL CLEANING company based in South East Queensland (within ~50km of Brisbane and the Gold Coast). Security and cleaning are EQUAL priority.\n\nSCOPE: The company ONLY provides security and cleaning SERVICES — labour delivered on site. It does NOT sell products.\n\nGOODS vs SERVICES — apply this test carefully, it decides most borderline cases:\n\n- REJECT (tier \"Reject\") when the tender is PURELY the supply and delivery of products, with no labour performed on the buyer's site. Examples to Reject: supply of stationery, supply of cleaning chemicals or janitorial consumables, supply of uniforms, supply of vehicles or plant, supply of CCTV hardware with no installation or monitoring.\n\n- KEEP when the tender asks for WORK PERFORMED ON SITE, even if the contractor must also supply consumables, chemicals or equipment as part of that work. Cleaning contracts almost always include supplying toilet paper, soap, bin liners and chemicals — that does NOT make it a goods tender. Guarding contracts often include uniforms and equipment — same rule.\n\nA panel or standing offer whose title bundles services with equipment — for example \"Security Services, Equipment & Maintenance\" or \"Cleaning Services and Supplies\" — is a SERVICES panel and must be KEPT. Bundled equipment never turns a services panel into a goods tender.\n\nThe question is never \"are goods mentioned?\" — it is \"is the winner being paid to DELIVER PRODUCTS, or to DO WORK?\" If people attend the site to clean or guard, it is a service and you must KEEP it.\n\nNever describe a tender as cleaning or security work unless those words describe the ACTUAL scope. If the tender is about motor vehicles, stationery, IT or any other category, say so and Reject — do not stretch an unrelated tender to fit. Do NOT treat construction, building, refurbishment, or warehouse-build projects as leads — Reject those. BUT if a tender is for security or cleaning SERVICES located AT a construction site, warehouse, depot or building, that IS a valid Security/Cleaning lead — keep it.\n\nReturn ONLY a valid JSON object (no markdown, no code fences, no prose):\n{\n  \"service_type\": \"Security | Cleaning | Both | None\",\n  \"security_type\": \"Manpower/Guarding | Electronic/CCTV | Mixed | N/A\",\n  \"summary\": \"1-2 sentence plain summary\",\n  \"location_text\": \"most specific place named e.g. 'Carrara, Gold Coast' or 'Statewide QLD'\",\n  \"state\": \"QLD | NSW | VIC | SA | WA | TAS | NT | ACT | National\",\n  \"region\": \"SEQ | QLD-statewide | QLD-other | interstate | national\",\n  \"budget_value\": \"value or 'Not Listed'\",\n  \"contract_duration\": \"e.g. '3 years + 2x1yr extension' or 'Not stated'\",\n  \"work_hours_per_week\": \"e.g. '40 hrs/week', '24/7 coverage', or 'Not stated'\",\n  \"ongoing_contract\": true or false,\n  \"is_panel\": true or false,\n  \"deadline\": \"closing date and time exactly as written\",\n  \"close_date_iso\": \"the closing date in YYYY-MM-DD, or '' if unclear\",\n  \"red_flags\": \"licences, prequalification, certs, incumbent, insurance, etc. or 'None found'\",\n  \"buyer_org\": \"the buying organisation / council / department, exactly as named, or ''\",\n  \"contact_name\": \"the tender contact officer's full name if explicitly stated, else ''\",\n  \"contact_role\": \"their position/title if stated, else ''\",\n  \"contact_email\": \"their email if explicitly stated, else ''\",\n  \"contact_phone\": \"their phone if explicitly stated, else ''\",\n  \"tier\": \"A | B | C | Reject\"\n}\n\nis_panel: set TRUE if this is a panel, standing offer arrangement (SOA), preferred supplier arrangement, register of pre-qualified suppliers, or prequalification round. These are high value even when the immediate scope is small, because membership unlocks future work that is never publicly advertised.\n\nCONTACT RULES: Extract buyer_org and contact_* ONLY if explicitly present in the tender text. NEVER invent an email/phone/name. If absent, return ''.\n\nSetting state and region:\n- Use the closing-time TIMEZONE as a strong state signal. 'Brisbane time' / UTC+10 with NO daylight saving = QLD. 'Canberra/Melbourne/Sydney time' or 'Hobart time' = interstate.\n- region = \"SEQ\" if within ~75km of Brisbane or the Gold Coast: Brisbane, Gold Coast, Logan, Ipswich, Redland, Moreton Bay, Caboolture, Beenleigh, Scenic Rim, Tweed, Sunshine Coast edge.\n- region = \"QLD-statewide\" for a QLD standing offer / panel / 'multiple locations' / 'Queensland' with no single fixed remote site.\n- region = \"QLD-other\" for a specific QLD location far from SEQ (Townsville, Cairns, Mackay, Rockhampton, Gladstone, Toowoomba, Mount Isa, Torres Strait, etc.).\n- region = \"interstate\" for a specific non-QLD location. region = \"national\" for Australia-wide.\n\nsecurity_type: Manpower/Guarding for static guards, patrols, crowd control, alarm response, concierge. Electronic/CCTV for camera supply/install, access control, monitoring systems. Mixed if both. N/A for cleaning-only.\n\nTiering (keep recall HIGH; when unsure lean B or C, never invent a Reject):\n- A = security or cleaning, region SEQ or QLD-statewide, ongoing or large, no blocking red flags.\n- B = security or cleaning but smaller/one-off, OR region QLD-other or national.\n- C = security or cleaning is only a minor or incidental part of a larger tender.\n- Reject = NOT a security or cleaning service (pure construction/refurbishment, supply of goods only, IT/cyber security, unrelated professional services).\n\nTender Text:\n{{ $json.text }}"
       },
-      "id": "n-0033-4a10-9a10-tenderradar",
+      "id": "n-0035-4a10-9a10-tenderradar",
       "name": "Basic LLM Chain",
       "type": "@n8n/n8n-nodes-langchain.chainLlm",
       "typeVersion": 1,
@@ -637,7 +681,7 @@
           "topP": 1
         }
       },
-      "id": "n-0034-4a10-9a10-tenderradar",
+      "id": "n-0036-4a10-9a10-tenderradar",
       "name": "OpenRouter Chat Model",
       "type": "@n8n/n8n-nodes-langchain.lmChatOpenRouter",
       "typeVersion": 1,
@@ -657,7 +701,7 @@
         "mode": "runOnceForEachItem",
         "jsCode": "let raw = ($json.text || '').toString().replace(/```json/gi, '').replace(/```/g, '').trim();\nlet parsed;\ntry { parsed = JSON.parse(raw); } catch (e) { parsed = { tier: 'Reject', parse_error: true }; }\nconst meta = $('Dedupe vs Sheet').item.json;\nreturn { json: {\n  RowID: meta.RowID, title: meta.title, link: meta.link, source: meta.source,\n  posted_raw: meta.posted_raw, ariba_request: meta.ariba_request || '',\n  ref: meta.ref || '',\n  category: meta.bcc_category || '',\n  tender_type: meta.bcc_type || '',\n  source_text: (meta.description || meta.text || '').toString(),\n  ...parsed\n} };"
       },
-      "id": "n-0035-4a10-9a10-tenderradar",
+      "id": "n-0037-4a10-9a10-tenderradar",
       "name": "Parse Tender JSON",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
@@ -670,7 +714,7 @@
       "parameters": {
         "jsCode": "// === IN-ZONE GATE ===\n// Whitelist of QLD suburbs/postcodes within ~50km of Brisbane & the Gold Coast.\n// Tags rather than filters, so out-of-zone drops reach the rejection log.\nconst KEEP_STATEWIDE = true;\nconst POSTCODES = new Set([\"4000\", \"4001\", \"4005\", \"4006\", \"4007\", \"4008\", \"4009\", \"4010\", \"4011\", \"4012\", \"4013\", \"4014\", \"4017\", \"4018\", \"4019\", \"4020\", \"4021\", \"4022\", \"4025\", \"4030\", \"4031\", \"4032\", \"4034\", \"4035\", \"4036\", \"4037\", \"4051\", \"4053\", \"4054\", \"4055\", \"4059\", \"4060\", \"4061\", \"4064\", \"4065\", \"4066\", \"4068\", \"4069\", \"4070\", \"4073\", \"4074\", \"4075\", \"4076\", \"4077\", \"4078\", \"4101\", \"4102\", \"4103\", \"4104\", \"4105\", \"4106\", \"4107\", \"4108\", \"4109\", \"4110\", \"4111\", \"4112\", \"4113\", \"4114\", \"4115\", \"4116\", \"4117\", \"4118\", \"4119\", \"4120\", \"4121\", \"4122\", \"4123\", \"4124\", \"4125\", \"4127\", \"4128\", \"4129\", \"4130\", \"4131\", \"4132\", \"4133\", \"4151\", \"4152\", \"4153\", \"4154\", \"4155\", \"4156\", \"4157\", \"4158\", \"4159\", \"4160\", \"4161\", \"4163\", \"4164\", \"4165\", \"4169\", \"4170\", \"4171\", \"4172\", \"4173\", \"4174\", \"4178\", \"4179\", \"4183\", \"4184\", \"4205\", \"4207\", \"4208\", \"4209\", \"4210\", \"4211\", \"4212\", \"4213\", \"4214\", \"4215\", \"4216\", \"4217\", \"4218\", \"4219\", \"4220\", \"4221\", \"4223\", \"4224\", \"4225\", \"4226\", \"4227\", \"4228\", \"4270\", \"4271\", \"4272\", \"4275\", \"4280\", \"4285\", \"4300\", \"4301\", \"4303\", \"4304\", \"4305\", \"4306\", \"4307\", \"4311\", \"4312\", \"4340\", \"4346\", \"4500\", \"4501\", \"4502\", \"4503\", \"4504\", \"4505\", \"4506\", \"4507\", \"4508\", \"4509\", \"4510\", \"4511\", \"4520\", \"4521\"]);\nconst SUBURBS = new Set([\"acacia ridge\", \"advancetown\", \"albany creek\", \"alberton\", \"albion\", \"alderley\", \"alexandra hills\", \"algester\", \"allenview\", \"altandi\", \"amberley\", \"amity\", \"amity point\", \"anglers paradise\", \"annerley\", \"anstead\", \"arana hills\", \"archerfield\", \"armstrong creek\", \"arundel\", \"ascot\", \"ashgrove\", \"ashgrove east\", \"ashgrove west\", \"ashmore\", \"ashwell\", \"aspley\", \"auchenflower\", \"augustine heights\", \"austinville\", \"avoca vale\", \"bahrs scrub\", \"bald hills\", \"balingool\", \"ballymore\", \"balmoral\", \"banks creek\", \"banksia beach\", \"bannockburn\", \"banoon\", \"banyo\", \"bardon\", \"bardon west\", \"barellan point\", \"baroona\", \"basin pocket\", \"beachmere\", \"beaudesert\", \"beechmont\", \"beenleigh\", \"belivah\", \"bellara\", \"bellbird park\", \"bellbowrie\", \"bellhaven\", \"bellmere\", \"belmont\", \"belmont heights\", \"benobble\", \"benowa\", \"berrinba\", \"bethania\", \"biddaddaba\", \"biggera waters\", \"bilinga\", \"binna burra\", \"birkdale\", \"blacksoil\", \"blackstone\", \"blackwall\", \"bloomfleet\", \"bongaree\", \"bonogin\", \"boondall\", \"booval\", \"borallon\", \"boronia heights\", \"bowen bridge\", \"bowen hills\", \"boykambil\", \"boyland\", \"bracken ridge\", \"brassall\", \"brassall heights\", \"bray park\", \"breakfast creek\", \"bremer\", \"brendale\", \"bribie island\", \"bribie island north\", \"bridgeman downs\", \"brighton\", \"brighton eventide\", \"brisbane\", \"brisbane airport\", \"brisbane city\", \"brisbane exhibition\", \"broadbeach\", \"broadbeach waters\", \"bromelton\", \"brookfield\", \"brookwater\", \"browns plains\", \"brownsleigh\", \"bryden\", \"buccan\", \"bulimba\", \"bulwer island\", \"bundall\", \"bundamba\", \"bunya\", \"buranda\", \"burbank\", \"burleigh heads\", \"burleigh town\", \"burleigh waters\", \"burpengary\", \"burpengary east\", \"cabbage tree point\", \"caboolture\", \"caboolture south\", \"cainbable\", \"calamvale\", \"camira\", \"camp hill\", \"camp mountain\", \"campbells pocket\", \"cannon hill\", \"canowindra\", \"canungra\", \"capalaba\", \"capalaba west\", \"carbrook\", \"carina\", \"carina heights\", \"carina north\", \"carindale\", \"carole park\", \"carrara\", \"carseldine\", \"cashmere\", \"cashs crossing\", \"cedar creek\", \"cedar grove\", \"cedar vale\", \"chambers flat\", \"chandler\", \"chapel hill\", \"chatswood hills\", \"chelmer\", \"chermside\", \"chermside south\", \"chermside west\", \"chevron island\", \"chirn park\", \"christmas creek\", \"churchill\", \"chuwar\", \"clagiraba\", \"clarendon\", \"clayfield\", \"clear island waters\", \"clear mountain\", \"cleveland\", \"clifton hill\", \"clontarf\", \"clontarf beach\", \"closeburn\", \"coalfalls\", \"collingwood park\", \"colmslie\", \"coochiemudlo island\", \"coolana\", \"coolangatta\", \"coombabah\", \"coomera\", \"coopers plains\", \"coorparoo\", \"corinda\", \"cornubia\", \"craigslea\", \"crestmead\", \"cryna\", \"currigee\", \"currumbin\", \"currumbin valley\", \"currumbin waters\", \"daisy hill\", \"dakabin\", \"darlington\", \"darra\", \"dayboro\", \"deagon\", \"deception bay\", \"deebing heights\", \"dinmore\", \"doboy\", \"dohles rocks\", \"doolandella\", \"doomben\", \"dorrington\", \"draper\", \"drewvale\", \"dundas\", \"dunwich\", \"durack\", \"dutton park\", \"eagle farm\", \"eagle heights\", \"eagle junction\", \"eagleby\", \"east brisbane\", \"east ipswich\", \"eastern heights\", \"eatons hill\", \"ebbw vale\", \"ebenezer\", \"edens landing\", \"eight mile plains\", \"eildon hill\", \"ekibin\", \"elanora\", \"ellen grove\", \"england creek\", \"enoggera\", \"enoggera reservoir\", \"erobin\", \"everton hills\", \"everton park\", \"fairfield\", \"fairney view\", \"fernvale\", \"ferny glen\", \"ferny grove\", \"ferny hills\", \"fig tree pocket\", \"fitzgibbon\", \"flinders lakes\", \"flinders view\", \"florida gardens\", \"flying fox\", \"forest glade\", \"forest lake\", \"forestdale\", \"fortitude valley\", \"frenchs forest\", \"fruitgrove\", \"gailes\", \"galloways hill\", \"gaven\", \"gaythorne\", \"geebung\", \"gilberton\", \"gilston\", \"glamorgan vale\", \"glen kedron\", \"gleneagle\", \"glenlogan\", \"godwin beach\", \"gold coast\", \"goodna\", \"goodna east\", \"goolman\", \"gordon park\", \"graceville\", \"graceville east\", \"grange\", \"greenbank\", \"greenslopes\", \"greenwood village\", \"griffin\", \"grovely\", \"guanaba\", \"gumdale\", \"haigslea\", \"halfway creek\", \"hamilton\", \"hamilton central\", \"hawthorne\", \"heathwood\", \"helensvale\", \"hemmant\", \"hendra\", \"heritage park\", \"herston\", \"highgate hill\", \"highland park\", \"highvale\", \"hillcrest\", \"hillview\", \"holland park\", \"holland park east\", \"holland park west\", \"hollywell\", \"holmview\", \"holts hill\", \"hope island\", \"humpybong\", \"ilbogan\", \"illinbah\", \"inala\", \"inala east\", \"inala heights\", \"inala west\", \"indooroopilly\", \"ingleside\", \"ipswich\", \"ironbark\", \"isle of capri\", \"ithaca\", \"jacobs well\", \"jamboree heights\", \"jeebropilly\", \"jimboomba\", \"jindalee\", \"jollys lookout\", \"josephville\", \"joyner\", \"jubilee\", \"kagaru\", \"kairabah\", \"kalinga\", \"kallangur\", \"kangaroo point\", \"karalee\", \"karana downs\", \"karawatha\", \"karrabin\", \"karragarra island\", \"kedron\", \"kedron upper\", \"keebra park\", \"kelvin grove\", \"kenmore\", \"kenmore east\", \"kenmore hills\", \"keperra\", \"kerry\", \"kerrydale\", \"kholo\", \"kimberley park\", \"king scrub\", \"kingsholme\", \"kingston\", \"kippa-ring\", \"kirra\", \"knapp creek\", \"kobble creek\", \"kooringal\", \"kuraby\", \"kurwongbah\", \"labrador\", \"laceys creek\", \"lake manchester\", \"lamb island\", \"lamington national park\", \"larapinta\", \"laravale\", \"lark hill\", \"latimer\", \"lawnton\", \"leichhardt\", \"lindum\", \"loamside\", \"logan\", \"logan central\", \"logan reserve\", \"logan village\", \"logandale\", \"loganholme\", \"loganlea\", \"lone pine\", \"long pocket\", \"loreto hill\", \"lota\", \"lower beechmont\", \"lowood\", \"luscombe\", \"lutwyche\", \"lyons\", \"lytton\", \"macgregor\", \"mackenzie\", \"maclean\", \"macleay island\", \"main beach\", \"mango hill\", \"manly\", \"manly west\", \"mansfield\", \"marburg\", \"margate\", \"margate beach\", \"marsden\", \"maudsland\", \"mayne\", \"mcdowall\", \"meadowbrook\", \"meeandah\", \"meldale\", \"mermaid beach\", \"mermaid keys\", \"mermaid waters\", \"merrimac\", \"miami\", \"miami keys\", \"middle park\", \"milton\", \"minden\", \"mitchelton\", \"moana park\", \"moggill\", \"molendinar\", \"monarch glen\", \"monsildale\", \"monterey keys\", \"moodlu\", \"moores pocket\", \"moorina\", \"moorooka\", \"moorvale\", \"morayfield\", \"moreton bay\", \"moreton island\", \"morningside\", \"mount coot-tha\", \"mount cotton\", \"mount crosby\", \"mount glorious\", \"mount gravatt\", \"mount gravatt east\", \"mount marrow\", \"mount nathan\", \"mount nebo\", \"mount ommaney\", \"mount pleasant\", \"mount samson\", \"mount tamborine\", \"mount thompson\", \"mount warren park\", \"mudgeeraba\", \"muirlea\", \"mundoolun\", \"munruben\", \"murarrie\", \"murrumba downs\", \"mutdapilly\", \"myrtletown\", \"narangba\", \"nashville\", \"nathan\", \"natural bridge\", \"nerang\", \"neranwood\", \"new beith\", \"new chum\", \"new farm\", \"newmarket\", \"newport\", \"newstead\", \"newtown\", \"nindooinbah\", \"ningi\", \"nobby beach\", \"norman park\", \"normanby\", \"north booval\", \"north ipswich\", \"north lakes\", \"north maclean\", \"north stradbroke island\", \"north tamborine\", \"north tivoli\", \"northgate\", \"norwell\", \"nudgee\", \"nudgee beach\", \"numinbah valley\", \"nundah\", \"o'reilly\", \"o'reillys\", \"ocean view\", \"one mile\", \"opossum creek\", \"ormeau\", \"ormeau hills\", \"ormiston\", \"oxenford\", \"oxford park\", \"oxley\", \"pacific pines\", \"paddington\", \"pallara\", \"palm beach\", \"paradise island\", \"paradise point\", \"paradise point keys\", \"paradise waters\", \"park ridge\", \"park ridge south\", \"parkinson\", \"parkwood\", \"patrick estate\", \"peak crossing\", \"peel island\", \"perulpa island\", \"petrie\", \"petrie terrace\", \"pimpama\", \"pindari hills\", \"pine mountain\", \"pinjarra hills\", \"pinkenba\", \"pinklands\", \"point halloran\", \"point talburpin\", \"port of brisbane\", \"priestdale\", \"priests gully\", \"priors pocket\", \"pullenvale\", \"purga\", \"raceview\", \"rainbow bay\", \"rainworth\", \"ransome\", \"raymonds hill\", \"red hill\", \"redbank\", \"redbank plains\", \"redcliffe\", \"redcliffe north\", \"redland\", \"redland bay\", \"redlands\", \"reedy creek\", \"regents park\", \"rialto\", \"richlands\", \"rifle range\", \"rio vista\", \"ripley\", \"riverbend\", \"riverhills\", \"riverview\", \"robertson\", \"robina\", \"rochedale\", \"rochedale south\", \"rocklea\", \"rocksberg\", \"rosewood\", \"rothwell\", \"runaway bay\", \"runcorn\", \"rush creek\", \"russell island\", \"sadliers crossing\", \"salisbury\", \"salisbury east\", \"samford\", \"samford valley\", \"samford village\", \"samsonvale\", \"sanctuary cove\", \"sandgate\", \"sandstone point\", \"santa barbara\", \"sarabah\", \"scarborough\", \"scotts point\", \"serviceton\", \"seven hills\", \"seventeen mile\", \"seventeen mile rocks\", \"shailer park\", \"sheldon\", \"sherwood\", \"shorncliffe\", \"silkstone\", \"silverbark ridge\", \"sinnamon park\", \"slacks creek\", \"somerset hills\", \"sorrento\", \"south bank\", \"south brisbane\", \"south maclean\", \"south ripley\", \"south stradbroke\", \"southern lamington\", \"southport\", \"sovereign islands\", \"split yard creek\", \"spring hill\", \"spring mountain\", \"springbrook\", \"springfield\", \"springfield central\", \"springfield lakes\", \"springwood\", \"st johns wood\", \"stafford\", \"stafford heights\", \"stanley bridge\", \"stapylton\", \"steiglitz\", \"stockleigh\", \"stones corner\", \"strathpine\", \"strathpine city\", \"stretton\", \"stuartholme\", \"studio village\", \"sumner\", \"sundale\", \"sunnybank\", \"sunnybank hills\", \"sunnybank south\", \"surfers paradise\", \"swanbank\", \"tabooba\", \"tabragalba\", \"taigum\", \"tallai\", \"tallebudgera\", \"tallebudgera valley\", \"tallegalla\", \"tally valley\", \"tamborine\", \"tamborine mountain\", \"tamborine village\", \"tamrookum creek\", \"tanah merah\", \"tangalooma\", \"tarampa\", \"taringa\", \"tarragindi\", \"teelah\", \"teneriffe\", \"tennyson\", \"thagoona\", \"the gap\", \"the spit\", \"thompson estate\", \"thorneside\", \"thornlands\", \"tingalpa\", \"tivoli\", \"toombul\", \"toorbul\", \"toowong\", \"torwood\", \"trinder park\", \"tugun\", \"tugun heights\", \"underwood\", \"upper brookfield\", \"upper caboolture\", \"upper coomera\", \"upper kedron\", \"upper mount gravatt\", \"varsity lakes\", \"veresdale\", \"veresdale scrub\", \"vernor\", \"victoria point\", \"victoria point west\", \"virginia\", \"wacol\", \"wacol east immigration centre\", \"wakerley\", \"walloon\", \"wanora\", \"warner\", \"washpool\", \"waterford\", \"waterford west\", \"wavell heights\", \"wavell heights north\", \"wellers hill\", \"wellington point\", \"west amberley\", \"west burleigh\", \"west end\", \"west ipswich\", \"westlake\", \"whinstanes\", \"white patch\", \"white rock\", \"whites hill\", \"whiteside\", \"wights mountain\", \"willawong\", \"willow vale\", \"willowbank\", \"wilston\", \"windaroo\", \"windsor\", \"wishart\", \"witheren\", \"wivenhoe\", \"wivenhoe hill\", \"wivenhoe pocket\", \"wolffdene\", \"wongawallan\", \"wonglepong\", \"woodend\", \"woodhill\", \"woodridge\", \"woodridge east\", \"woody point\", \"woolloongabba\", \"wooloowin\", \"woongoolba\", \"woorim\", \"worongary\", \"wulkuraka\", \"wynnum\", \"wynnum central\", \"wynnum north\", \"wynnum west\", \"yamanto\", \"yarrabilba\", \"yatala\", \"yeerongpilly\", \"yellow wood\", \"yeronga\", \"yeronga west\", \"yugar\", \"zillmere\"]);\n\nconst norm = (s) => (s || '').toString().toLowerCase();\nconst INTERSTATE = ['nsw','vic','sa','wa','tas','nt','act','new south wales','victoria','tasmania'];\n\nreturn $input.all().map((item) => {\n  const j = item.json;\n  let inzone = '', reason = '';\n\n  if (!['A','B','C'].includes(j.tier)) {\n    reason = 'LLM tier = ' + (j.tier || 'none');\n  } else {\n    const region = norm(j.region), state = norm(j.state), loc = norm(j.location_text);\n    if (region === 'interstate' || INTERSTATE.includes(state)) {\n      reason = 'interstate (' + (j.state || j.region) + ')';\n    } else {\n      if (KEEP_STATEWIDE && region === 'qld-statewide') inzone = 'Statewide';\n      if (!inzone) {\n        const found = (loc.match(/\\b4\\d{3}\\b/g) || []);\n        if (found.some((pc) => POSTCODES.has(pc))) inzone = 'Yes (postcode)';\n      }\n      if (!inzone) {\n        for (const sub of SUBURBS) {\n          if (sub.length < 4) continue;\n          const re = new RegExp('(^|[^a-z])' + sub.replace(/[.*+?^${}()|[\\]\\\\]/g, '\\\\$&') + '([^a-z]|$)');\n          if (re.test(loc)) { inzone = 'Yes (suburb)'; break; }\n        }\n      }\n      if (!inzone) reason = 'outside 50km zone (' + (j.location_text || 'no location') + ')';\n    }\n  }\n\n  if (inzone && inzone.startsWith('Yes')) j.region = 'SEQ';\n  j.InZone = inzone;\n  j._keep = !!inzone;\n  j._drop_reason = reason;\n  j._stage = 'zone/tier';\n  return { json: j };\n});"
       },
-      "id": "n-0036-4a10-9a10-tenderradar",
+      "id": "n-0038-4a10-9a10-tenderradar",
       "name": "In-Zone Gate",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
@@ -704,7 +748,7 @@
         },
         "options": {}
       },
-      "id": "n-0037-4a10-9a10-tenderradar",
+      "id": "n-0039-4a10-9a10-tenderradar",
       "name": "In Zone?",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2,
@@ -717,7 +761,7 @@
       "parameters": {
         "prompt": "=Write a short, ready-to-edit Expression of Interest opening that a South East Queensland security & cleaning contractor could send in response to this tender. 4-6 sentences, professional and warm. Name the buyer and the specific service required, highlight relevant strengths (fully licensed and accredited, rapid local SEQ response, proven on ongoing/contracted work), and finish with a line inviting the next step. Use [bracketed placeholders] for company-specific details. Plain text only, no markdown, no headings.\n\nTender: {{ $json.title }}\nService: {{ $json.service_type }} ({{ $json.security_type }})\nLocation: {{ $json.location_text }} ({{ $json.region }})\nContract: {{ $json.contract_duration }} | Hours: {{ $json.work_hours_per_week }}\nPanel/SOA: {{ $json.is_panel }}\nSummary: {{ $json.summary }}"
       },
-      "id": "n-0038-4a10-9a10-tenderradar",
+      "id": "n-0040-4a10-9a10-tenderradar",
       "name": "Write Bid Draft",
       "type": "@n8n/n8n-nodes-langchain.chainLlm",
       "typeVersion": 1,
@@ -733,7 +777,7 @@
           "temperature": 0.4
         }
       },
-      "id": "n-0039-4a10-9a10-tenderradar",
+      "id": "n-0041-4a10-9a10-tenderradar",
       "name": "OpenRouter Chat Model1",
       "type": "@n8n/n8n-nodes-langchain.lmChatOpenRouter",
       "typeVersion": 1,
@@ -753,7 +797,7 @@
         "mode": "runOnceForEachItem",
         "jsCode": "const meta = $('In-Zone Gate').item.json;\nreturn { json: { ...meta, bid_draft: ($json.text || '').toString().trim() } };"
       },
-      "id": "n-0040-4a10-9a10-tenderradar",
+      "id": "n-0042-4a10-9a10-tenderradar",
       "name": "Attach Draft",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
@@ -766,7 +810,7 @@
       "parameters": {
         "jsCode": "const fmt = (d) => { try { const x = new Date(d); return isNaN(x) ? '' : x.toLocaleDateString('en-AU', { timeZone: 'Australia/Brisbane' }); } catch (e) { return ''; } };\nconst capturedTs = new Date().toLocaleString('en-AU', { timeZone: 'Australia/Brisbane' });\nconst today = new Date();\nreturn $input.all().map((it) => {\n  const j = it.json;\n  const close = j.close_date_iso ? new Date(j.close_date_iso) : null;\n  const daysToClose = (close && !isNaN(close)) ? Math.round((close - today) / 86400000) : '';\n  return { json: {\n    RowID: j.RowID || (j.guid || j.link || j.title || '').toString().slice(0, 180),\n    Captured: capturedTs,\n    HumanApproval: 'Pending',\n    DocumentLink: '',\n    Tier: j.tier || '',\n    IsPanel: j.is_panel ? 'PANEL' : '',\n    Service: j.service_type || '',\n    SecurityType: j.security_type || '',\n    Title: j.title || '',\n    Location: j.location_text || '',\n    Region: j.region || '',\n    State: j.state || '',\n    Budget: j.budget_value || '',\n    ContractDuration: j.contract_duration || '',\n    WorkHours: j.work_hours_per_week || '',\n    Posted: j.posted_raw ? fmt(j.posted_raw) : '',\n    Deadline: j.deadline || '',\n    DaysToClose: daysToClose,\n    RedFlags: j.red_flags || '',\n    Summary: j.summary || '',\n    BuyerOrg: j.buyer_org || '',\n    ContactName: j.contact_name || '',\n    ContactRole: j.contact_role || '',\n    ContactEmail: j.contact_email || '',\n    ContactPhone: j.contact_phone || '',\n    BidDraft: j.bid_draft || '',\n    Source: j.source || '',\n    Link: j.link || '',\n    AribaRequest: j.ariba_request || '',\n    Ref: j.ref || '',\n    Category: j.category || '',\n    TenderType: j.tender_type || '',\n    Details: (j.source_text || '')\n      .toString()\n      .replace(/\\s+/g, ' ')\n      .trim()\n      .slice(0, 3000)\n  }};\n});"
       },
-      "id": "n-0041-4a10-9a10-tenderradar",
+      "id": "n-0043-4a10-9a10-tenderradar",
       "name": "Format for Sheets",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
@@ -1132,7 +1176,7 @@
         },
         "options": {}
       },
-      "id": "n-0042-4a10-9a10-tenderradar",
+      "id": "n-0044-4a10-9a10-tenderradar",
       "name": "Google Sheets",
       "type": "n8n-nodes-base.googleSheets",
       "typeVersion": 4.2,
@@ -1189,7 +1233,7 @@
         },
         "options": {}
       },
-      "id": "n-0043-4a10-9a10-tenderradar",
+      "id": "n-0045-4a10-9a10-tenderradar",
       "name": "High Priority?",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2,
@@ -1210,7 +1254,7 @@
         "text": "=:mega: *New tender — Tier {{ $json.Tier }} ({{ $json.Service }})* {{ $json.IsPanel }}\n\n*{{ $json.Title }}*\n:round_pushpin: {{ $json.Location }}  |  {{ $json.Region }}\n:alarm_clock: Closes: {{ $json.Deadline }}  ({{ $json.DaysToClose }} days)\n:office: {{ $json.BuyerOrg }}\n:telephone_receiver: {{ $json.ContactName }} {{ $json.ContactEmail }} {{ $json.ContactPhone }}\n:satellite: Source: {{ $json.Source }}\n\n{{ $json.Summary }}\n\nApprove in the sheet, then paste the DocumentLink.\n{{ $json.Link }}",
         "otherOptions": {}
       },
-      "id": "n-0044-4a10-9a10-tenderradar",
+      "id": "n-0046-4a10-9a10-tenderradar",
       "name": "Slack - New Tender",
       "type": "n8n-nodes-base.slack",
       "typeVersion": 2.2,
@@ -1230,7 +1274,7 @@
       "parameters": {
         "jsCode": "const ts = new Date().toLocaleString('en-AU', { timeZone: 'Australia/Brisbane' });\nreturn $input.all().map((it) => {\n  const j = it.json;\n  return { json: {\n    Logged: ts,\n    Source: j.source || '',\n    Title: (j.title || '').toString().slice(0, 200),\n    Stage: j._stage || '',\n    Reason: j._drop_reason || '',\n    Tier: j.tier || '',\n    Location: j.location_text || '',\n    Link: j.link || '',\n    Snippet: (j.text || j.search_blob || '').toString().slice(0, 300)\n  }};\n});"
       },
-      "id": "n-0045-4a10-9a10-tenderradar",
+      "id": "n-0047-4a10-9a10-tenderradar",
       "name": "Build Rejection Rows",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
@@ -1356,7 +1400,7 @@
         },
         "options": {}
       },
-      "id": "n-0046-4a10-9a10-tenderradar",
+      "id": "n-0048-4a10-9a10-tenderradar",
       "name": "Log Rejected",
       "type": "n8n-nodes-base.googleSheets",
       "typeVersion": 4.2,
@@ -1376,7 +1420,7 @@
       "parameters": {
         "jsCode": "const ts = new Date().toLocaleString('en-AU', { timeZone: 'Australia/Brisbane' });\nreturn $input.all().map((it) => {\n  const j = it.json;\n  const rel = (j.text || '').match(/release date\\s*:?\\s*([A-Za-z]+\\s*\\d{4}|TBC|TBA)/i);\n  const cat = (j.text || '').match(/category\\s*:?\\s*([^]*?)(release date|tender type|contact|$)/i);\n  return { json: {\n    Logged: ts,\n    Source: j.source || 'Brisbane City Council',\n    Title: j.title || '',\n    Ref: j.ref || '',\n    Category: cat ? cat[1].replace(/\\s+/g, ' ').trim().slice(0, 120) : '',\n    ExpectedRelease: rel ? rel[1].trim() : '',\n    Link: j.link || '',\n    Detail: (j.text || '').toString().slice(0, 500)\n  }};\n});"
       },
-      "id": "n-0047-4a10-9a10-tenderradar",
+      "id": "n-0049-4a10-9a10-tenderradar",
       "name": "Build Pipeline Rows",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
@@ -1492,7 +1536,7 @@
         },
         "options": {}
       },
-      "id": "n-0048-4a10-9a10-tenderradar",
+      "id": "n-0050-4a10-9a10-tenderradar",
       "name": "Log Pipeline Watch",
       "type": "n8n-nodes-base.googleSheets",
       "typeVersion": 4.2,
@@ -1547,6 +1591,11 @@
           },
           {
             "node": "Fetch Brisbane CC",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Fetch eTender QLD",
             "type": "main",
             "index": 0
           },
@@ -1712,6 +1761,17 @@
         ]
       ]
     },
+    "Fetch eTender QLD": {
+      "main": [
+        [
+          {
+            "node": "Parse eTender QLD",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
     "Read Watchlist": {
       "main": [
         [
@@ -1757,6 +1817,17 @@
       ]
     },
     "Normalize (VendorPanel)": {
+      "main": [
+        [
+          {
+            "node": "Classify Relevance",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse eTender QLD": {
       "main": [
         [
           {
