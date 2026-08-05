@@ -1,135 +1,147 @@
 # Tender Radar — what we need from you
 
-We handle the technical build, the portal registrations and the day-to-day running.
-This is the short list of what has to come from your side.
+**What you get:** a continuously updated, filtered list of security and cleaning
+tenders relevant to your business, each one with a written analysis — scope,
+location, closing date, budget signals, contact details and risk flags — delivered
+to a live sheet and to Slack.
+
+**What we need:** four things. Two are contact details, two are accounts.
 
 ---
 
-## 1. Two contact details — 2 minutes
+## 1. Email address — 2 minutes
 
-| What | Why |
-|---|---|
-| **Email address** for the person who should see tender alerts | We invite this address to the live tender sheet on our Google Drive |
-| **Slack account / email to invite** | Real-time alerts when a matching tender is found |
+The address that should receive tender alerts and have access to the live sheet.
 
-That's all we need to switch the radar on for you.
+We host the sheet on our Google Drive and invite you to it, so there's nothing to
+set up on your side.
 
 ---
 
-## 2. Access to your n8n workspace
+## 2. Slack — 2 minutes
 
-The automation runs inside n8n. We need **owner or admin** level access — not a
-standard user login — because we have to import workflows and create credentials,
-which a normal user account can't do.
+The Slack account (or email address) to invite, so matched tenders reach you in
+real time rather than only when someone opens the sheet.
 
-Send us: the n8n URL and an owner/admin invitation to our email.
-
----
-
-## 3. Your compliance pack — needed before we can register you anywhere
-
-We'll do all the registration work on the tender portals (VendorPanel, AusTender,
-QTenders, eTender QLD, Brisbane City Council's SAP Ariba, Local Buy). But those
-registrations are made **in your company's legal name**, so we can't complete them
-without your documents.
-
-Please send, in one folder:
-
-**Company**
-- ABN and registered company name
-- Current ASIC company extract
-- Director's name and contact details (some portals require a director to attest)
-
-**Insurance — current certificates of currency**
-- Public liability (most government contracts require **$20 million**)
-- WorkCover Queensland
-- Professional indemnity
-
-**Security licences (QLD Office of Fair Trading)**
-- Security firm licence number
-- Security provider licence — Class 1 and Class 2 as applicable
-- Security equipment installer licence (for the CCTV / electronic side)
-
-**Supporting**
-- Workplace Health & Safety management system or documented SWMS
-- Three contactable referees from comparable contracts
-- ISO 9001 / 14001 certificates if held — these are frequently scored in evaluations
-- Any existing panel memberships you already hold
-
-> These are the documents tender submissions get rejected over — not price.
-> Expired certificates disqualify otherwise-winning bids, so please tell us the
-> renewal dates too and we'll track them.
+If you don't use Slack, tell us and we'll send alerts by email instead.
 
 ---
 
-## 4. A shared tenders mailbox — strongly recommended
+## 3. n8n account — the automation platform
 
-Set up (or nominate) a mailbox such as **`tenders@yourcompany.com.au`** and give us
-its IMAP login.
+n8n is where the workflows run: pulling tenders from every source, filtering them
+to your services and your region, and writing the analysis.
 
-**Why this matters more than it sounds.** A large share of security and cleaning
-work is never publicly advertised. It arrives as a direct invitation to suppliers
-already on a panel — including Brisbane City Council's Ariba alerts, Local Buy
-RFQs, and incumbent contract renewals. Those all come by **email**.
+**What we need:** an **owner** or **admin** level invitation — not a standard user
+login. A standard user can't import workflows or create credentials, so the setup
+can't be completed from one.
 
-- If they land in a shared mailbox we can read → the radar catches them and they
-  reach your sheet like everything else.
-- If they land in one person's personal inbox → they are invisible to the system,
-  and they get missed when that person is on leave.
-
-This is the single cheapest way to widen your coverage.
+- Sign up at <https://n8n.io> (Cloud) — or, if you already run n8n, just send us the
+  URL and an admin invite
+- Invite our email as an **Owner** / **Admin**
 
 ---
 
-## 5. One named decision-maker
+## 4. Apify account — the data collection layer
 
-The radar finds and ranks opportunities; it does not decide which to chase. We need
-one person who reviews the sheet and marks tenders **Approved** or **Rejected**.
+Several tender portals require a real browser session to reach the tender
+documents — they can't be read by a simple web request. Apify runs that browser
+automation in the cloud, on a schedule.
 
-Everything downstream — document retrieval, deep analysis, bid drafting — only
-triggers on an approval. If nobody ticks the box, the pipeline sits idle.
+**Why it matters:** the alternative is running the automation on a physical
+computer that has to stay switched on. Apify removes that dependency entirely — the
+radar runs whether or not anyone's machine is on, including overnight and over
+weekends, which is when a lot of tender activity lands.
 
-Please nominate: name, email, and roughly when they'll review (daily is ideal;
-tenders routinely close inside 10 business days).
+**What we need:**
+- Sign up at <https://apify.com>
+- Invite our email to the account, or send us the **API token**
+  (Settings → Integrations → API token)
 
----
-
-## What we do from here
-
-Once items 1–3 arrive:
-
-1. We register you on every relevant portal and complete the category selections
-   (this is where most suppliers go wrong — Brisbane City Council only sends alerts
-   for the exact categories chosen at registration).
-2. We put you on the notification list for the next **Local Buy** cleaning and
-   security panel refresh. Local Buy panels accounted for roughly a third of the
-   relevant opportunities in our sample scan, and panel members receive direct
-   quote requests that never appear publicly. This is the highest-value single
-   action available to you.
-3. We switch the radar on and you start seeing matched tenders in your sheet and
-   in Slack.
-
-**Timing note:** the Brisbane City Council registration has a 2-business-day
-approval step and the follow-up questionnaire expires after 90 days, so the sooner
-item 3 reaches us, the sooner that one is locked in.
+Start on the free tier. We'll tell you if and when the volume justifies moving up a
+plan, and what it would cost, before anything is charged.
 
 ---
 
-## Questions you may have
+## 5. Optional but valuable — a shared tenders mailbox
 
-**Do we need to pay for any tender subscription services?**
-No. We deliberately do not use paid tender aggregators — they resell opportunities
-that are already free on the official portals. In our testing, 19 of 23 relevant
-opportunities came through a single free source. You would be paying a monthly fee
-for the same information plus a lot of noise.
+If you have (or can create) an address like **`tenders@yourcompany.com.au`** and
+give us its IMAP login, we can widen your coverage significantly.
 
-**Who owns the data?**
-The tender sheet lives on our Google Drive during the engagement, and you have full
-access to it. If you'd like it transferred into your own Google account at any
-point, we'll hand it over.
+A large share of security and cleaning work is never publicly advertised — it
+arrives as a direct invitation to suppliers already on a procurement panel, or as
+an incumbent contract renewal. Those come by **email**, not through any portal.
 
-**What about our VendorPanel password?**
-Where we operate a portal account on your behalf, credentials are stored in an
-encrypted credential store and never in code or documents. If you'd prefer, we can
-run under a separate user account on your portal profile so you can revoke our
-access independently at any time.
+- In a shared mailbox we can read → they get captured, analysed and added to your
+  sheet like everything else.
+- In one person's personal inbox → they're invisible to the system, and they get
+  missed whenever that person is away.
+
+Entirely your call, but it's the cheapest coverage increase available.
+
+---
+
+## 6. One named reviewer
+
+The radar finds and ranks opportunities. It doesn't decide which ones you chase.
+
+We need one person who opens the sheet and marks tenders **Approved** or
+**Rejected**. The deeper analysis — full document retrieval, detailed scope
+breakdown — only runs on the ones you approve, so the system stays focused on what
+you actually care about.
+
+Please nominate a name and email. Daily review is ideal; tenders routinely close
+within 10 business days of publication.
+
+---
+
+## For your side — not something we need, but worth knowing
+
+We deliver the opportunities and the analysis. Bidding is yours. A few things that
+determine whether the opportunities we surface are actually winnable for you:
+
+**Register on the portals** — most tenders require you to be a registered supplier
+before you can download documents or submit. The main ones for your region:
+VendorPanel, AusTender, QTenders, eTender Queensland, and Brisbane City Council's
+SAP Ariba portal.
+
+> **Brisbane City Council specifically:** their registration has a 2-business-day
+> approval step, and the follow-up questionnaire expires after 90 days. They also
+> only send tender alerts for the exact product categories you select during
+> registration — select broadly across cleaning, guarding, security systems and
+> facilities maintenance, or you'll receive nothing.
+
+**Get on Local Buy** — this is the highest-value action available to you. Local Buy
+is the Queensland local-government procurement panel. In our sample scan it
+accounted for roughly a third of all relevant opportunities. Panel members receive
+direct quote requests that are never publicly advertised; non-members only ever see
+open tenders. Panels open periodically, so get on the notification list for the next
+cleaning and security refresh.
+
+**Keep your compliance folder current** — tender responses are more often rejected
+on paperwork than on price. Have ready: ABN and ASIC extract, public liability
+(most government contracts require $20M), WorkCover Queensland, professional
+indemnity, your QLD security firm and provider licences plus the security equipment
+installer licence for the electronic side, a documented WHS system, and three
+contactable referees. Watch the expiry dates — a lapsed certificate disqualifies an
+otherwise winning bid.
+
+**You don't need a paid tender subscription.** Services that resell tender listings
+for a monthly fee are republishing what's already free on the official portals. In
+our testing, 19 of 23 relevant opportunities came through a single free source. The
+radar already covers them.
+
+---
+
+## Summary — what to send us
+
+| | Item | Effort |
+|---|---|---|
+| 1 | Email address for alerts | 2 min |
+| 2 | Slack account to invite | 2 min |
+| 3 | n8n account — **owner/admin** invite | 10 min |
+| 4 | Apify account — invite or API token | 10 min |
+| 5 | *(optional)* Shared tenders mailbox + IMAP login | 15 min |
+| 6 | Name of the person who'll review the sheet | 1 min |
+
+Once items 1–4 arrive we can have the radar running and delivering tenders.
