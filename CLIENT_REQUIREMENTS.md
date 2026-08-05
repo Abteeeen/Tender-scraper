@@ -1,163 +1,135 @@
-# Tender Radar — what we need from you to go live
+# Tender Radar — what we need from you
 
-Two separate lists here. **Part A** is access we need to run the automation.
-**Part B** is registrations *you* need to hold so the tenders are actually winnable
-once we find them. Part B matters more than Part A — the radar can only surface
-opportunities you're eligible to bid on.
+We handle the technical build, the portal registrations and the day-to-day running.
+This is the short list of what has to come from your side.
 
 ---
 
-## Part A — access we need from you
+## 1. Two contact details — 2 minutes
 
-| # | What | Why | How to send it |
-|---|---|---|---|
-| A1 | **VendorPanel supplier login** (email + password) | The robot signs in as you to download tender packs. ~83% of your relevant tenders come through here. | Password manager share, or a 1-time secure note |
-| A2 | **Google account** for the tender sheet + Drive folder | Where the radar writes results and stores downloaded packs | Share the sheet + a Drive folder as **Editor** with the service-account email we provide |
-| A3 | **Slack workspace** (or a notification email address) | Where alerts land | Invite us to the workspace, or nominate a monitored inbox |
-| A4 | **Nominated decision-maker** | One named person who ticks Approved / Rejected in the sheet daily | Name + email |
-| A5 | *(optional)* **A shared mailbox** e.g. `tenders@yourcompany.com.au` | Lets us capture invitation-only tenders that arrive by email — Ariba invites, panel RFQs, incumbent renewals | IMAP credentials, or forward to an address we supply |
+| What | Why |
+|---|---|
+| **Email address** for the person who should see tender alerts | We invite this address to the live tender sheet on our Google Drive |
+| **Slack account / email to invite** | Real-time alerts when a matching tender is found |
 
-> **A5 is the one people skip and shouldn't.** A large share of security and cleaning
-> work never appears on a public portal — it arrives as a direct RFQ to suppliers
-> already on a panel. If those emails land in a monitored inbox, the radar reads
-> them too. If they land in someone's personal Outlook, they're invisible to us.
-
-### Security note
-We never store your VendorPanel password in the workflow or on GitHub. It lives in
-a local `.env` file on the machine running the robot, which is excluded from source
-control. If you'd prefer, create a **separate VendorPanel user** under your company
-account for the robot, so you can revoke it independently.
+That's all we need to switch the radar on for you.
 
 ---
 
-## Part B — portals you must be registered on
+## 2. Access to your n8n workspace
 
-### B1. Free and mandatory — register on all of these
+The automation runs inside n8n. We need **owner or admin** level access — not a
+standard user login — because we have to import workflows and create credentials,
+which a normal user account can't do.
 
-| Portal | Covers | Cost | Link |
-|---|---|---|---|
-| **VendorPanel** | Most SEQ councils (Moreton Bay, Logan, Redland, Ipswich, Gold Coast, Scenic Rim…), Local Buy panels, QLD state agencies migrating off QTenders | Free supplier account | <https://www.vendorpanel.com.au> |
-| **AusTender** | All Federal Government — Defence bases, Services Australia, ATO, Border Force sites | Free | <https://www.tenders.gov.au> |
-| **QTenders / Queensland Government** | State agencies. **Now migrating to VendorPanel** — register both while the transition runs | Free | <https://qtenders.epw.qld.gov.au> |
-| **eTender Queensland (QBuild / Housing & Public Works)** | Government building maintenance, schools, social housing, police facilities | Free | <https://www.hpw.qld.gov.au/qbuild> |
-| **Brisbane City Council — SAP Ariba** | BCC only. Not on VendorPanel, has its own walled portal | Free (SAP Business Network *Standard* account) | see B2 below |
-
-### B2. Brisbane City Council — do this one properly, it has a trap
-
-BCC publishes tender *titles* publicly but keeps the documents behind SAP Ariba.
-No scraper can get past that — it's an administrative wall, not a technical one.
-The fix is registration:
-
-1. Complete the **Supplier Self-Registration Request** form on
-   <https://www.brisbane.qld.gov.au/business/council-tenders-and-market-led-proposals/supplier-portal--sap-ariba--support>
-2. Allow **2 business days** for Council to approve.
-3. You'll get an email titled *"Invitation: Register to become a supplier with
-   Brisbane City Council"* — **you must complete the questionnaire within 90 days**
-   or the invitation expires and you start over.
-4. Create a **SAP Business Network Standard** account (free). Do **not** be upsold
-   to an Enterprise account — Standard is sufficient to receive and respond to
-   tenders.
-5. **The critical step:** during registration you pick **UNSPSC category codes**.
-   BCC sends tender alerts based *only* on the codes you select. Pick the wrong
-   ones and you get nothing. Select everything covering:
-   - building & office cleaning / janitorial services
-   - guard & protective services
-   - security systems, CCTV and alarm installation & maintenance
-   - grounds and facilities maintenance
-
-   Use the portal's own category search — don't guess codes from memory, and select
-   broadly rather than narrowly. Over-selecting costs you nothing but extra emails;
-   under-selecting costs you the contract.
-
-Once registered, BCC's alerts arrive by **email** — which is exactly why item **A5**
-above matters. Point them at the shared mailbox and the radar picks them up.
-
-### B3. Panels and prequalification — the highest-leverage item on this page
-
-In our sample scan, **Local Buy accounted for roughly 35% of all relevant
-opportunities.** Panel membership is not optional if you want that third.
-
-| Scheme | What it unlocks | Notes |
-|---|---|---|
-| **Local Buy** (LGAQ-owned) | Pre-qualified panel for Queensland councils. Councils buy off it without going to open tender | Panels are periodic — you can only apply when a category re-opens. **Register for notification of the next cleaning and security panel refresh now.** <https://www.localbuy.net.au> |
-| **QLD Government standing offer arrangements** | State agency work without per-job tendering | Via QTenders / VendorPanel |
-| **QBuild prequalification (PQC)** | Government building maintenance work | Required for some HPW work |
-| **Individual council supplier lists** | Direct RFQs under the tender threshold | Usually a form on each council's site |
-
-**Being on a panel changes what you receive.** Non-panel suppliers see public
-tenders only. Panel members receive direct RFQs — lower competition, faster
-turnaround, and often never publicly advertised at all.
-
-### B4. Licences and documents to have ready before bidding
-
-Tender responses are frequently rejected on missing paperwork, not on price.
-Have current copies of all of these in one folder:
-
-**Security side (Queensland Office of Fair Trading):**
-- **Security firm licence** — required to operate as a security business
-- **Security provider licence Class 1** — unarmed guarding, crowd control
-- **Security provider licence Class 2** — where applicable
-- **Security equipment installer licence** — required for the CCTV / electronic side
-- Individual licences for every guard on the roster
-
-**Both sides:**
-- ABN, current ASIC company extract
-- **Public liability insurance** — most government contracts require $20M
-- **WorkCover Queensland** policy
-- Professional indemnity insurance
-- Workplace Health & Safety management system / documented SWMS
-- Referees — three comparable contracts, contactable
-- Environmental and quality policies (ISO 9001 / 14001 if held — often scored)
-- Modern Slavery statement if turnover triggers it
-- Evidence of award-compliant wage rates (Cleaning Services Award / Security
-  Services Industry Award) — increasingly audited
-
-**Queensland Procurement Policy 2026 note:** compliance with the *Queensland
-Government Supplier Code of Conduct* is now a gateway condition, and from
-**1 April 2026** applies to all supplier engagements regardless of value. Read and
-be able to attest to it before your next state bid.
+Send us: the n8n URL and an owner/admin invitation to our email.
 
 ---
 
-## Part C — paid tender sites: our honest recommendation
+## 3. Your compliance pack — needed before we can register you anywhere
 
-**Don't subscribe to any of them yet.**
+We'll do all the registration work on the tender portals (VendorPanel, AusTender,
+QTenders, eTender QLD, Brisbane City Council's SAP Ariba, Local Buy). But those
+registrations are made **in your company's legal name**, so we can't complete them
+without your documents.
 
-Paid aggregators (TenderLink, Australian Tenders, TenderHub, BidContender and
-similar) charge a monthly fee to re-publish tenders that are *already public* on the
-portals in Part B. Their pitch is convenience — one search box across many sources.
-Your radar already does that, for the sources that matter to you, filtered to your
-services and your 50 km radius.
+Please send, in one folder:
 
-Concretely: in a 492-item scan we found 23 relevant opportunities, and 19 of them
-came through VendorPanel alone. A paid aggregator would have shown you the same
-19, plus several hundred irrelevant ones, for a monthly fee.
+**Company**
+- ABN and registered company name
+- Current ASIC company extract
+- Director's name and contact details (some portals require a director to attest)
 
-**When a paid subscription *would* be worth it:**
-- You expand beyond SEQ into NSW or VIC and want private-sector work
-- You want **contract award history** to see who holds an incumbent contract and
-  when it expires — some paid services package this well. (Our Workflow 3 already
-  pulls federal contract expiries from AusTender for free; the paid value would be
-  state and council awards.)
-- You want tender-writing support bundled in, which some resellers offer
+**Insurance — current certificates of currency**
+- Public liability (most government contracts require **$20 million**)
+- WorkCover Queensland
+- Professional indemnity
 
-If you want, we'll benchmark two of them against a month of your radar's output and
-show you exactly what, if anything, they caught that we didn't. That's a fairer test
-than any of their marketing.
+**Security licences (QLD Office of Fair Trading)**
+- Security firm licence number
+- Security provider licence — Class 1 and Class 2 as applicable
+- Security equipment installer licence (for the CCTV / electronic side)
 
----
+**Supporting**
+- Workplace Health & Safety management system or documented SWMS
+- Three contactable referees from comparable contracts
+- ISO 9001 / 14001 certificates if held — these are frequently scored in evaluations
+- Any existing panel memberships you already hold
 
-## Suggested order of action
-
-1. **Today** — send us A1–A4. The radar is otherwise ready.
-2. **This week** — start the BCC SAP Ariba registration (it has a 2-day approval
-   step and a 90-day expiry, so don't leave it).
-3. **This week** — set up the shared tenders mailbox (A5).
-4. **This month** — get on Local Buy's notification list for the next cleaning and
-   security panel refresh. This is the single highest-value action on this page.
-5. **Ongoing** — keep the Part B4 document folder current. Expired insurance
-   certificates disqualify otherwise-winning bids.
+> These are the documents tender submissions get rejected over — not price.
+> Expired certificates disqualify otherwise-winning bids, so please tell us the
+> renewal dates too and we'll track them.
 
 ---
 
-*Sources: [Brisbane City Council SAP Ariba supplier portal](https://www.brisbane.qld.gov.au/business/council-tenders-and-market-led-proposals/supplier-portal--sap-ariba--support) · [Local Buy](https://www.localbuy.net.au/Home) · [QLD security firm licence](https://www.qld.gov.au/law/laws-regulated-industries-and-accountability/queensland-laws-and-regulations/regulated-industries-and-licensing/regulated-industries-licensing-and-legislation/security-industry-regulation/managing-a-security-firm/apply-for-a-security-firm-licence) · [QLD security equipment installer licence](https://www.qld.gov.au/law/laws-regulated-industries-and-accountability/queensland-laws-and-regulations/regulated-industries-and-licensing/regulated-industries-licensing-and-legislation/security-industry-regulation/security-technical-licence/apply-for-a-security-equipment-installer-licence) · [Queensland Procurement Policy 2026 — MinterEllison](https://www.minterellison.com/articles/queensland-procurement-policy-2026-what-you-need-to-know)*
+## 4. A shared tenders mailbox — strongly recommended
+
+Set up (or nominate) a mailbox such as **`tenders@yourcompany.com.au`** and give us
+its IMAP login.
+
+**Why this matters more than it sounds.** A large share of security and cleaning
+work is never publicly advertised. It arrives as a direct invitation to suppliers
+already on a panel — including Brisbane City Council's Ariba alerts, Local Buy
+RFQs, and incumbent contract renewals. Those all come by **email**.
+
+- If they land in a shared mailbox we can read → the radar catches them and they
+  reach your sheet like everything else.
+- If they land in one person's personal inbox → they are invisible to the system,
+  and they get missed when that person is on leave.
+
+This is the single cheapest way to widen your coverage.
+
+---
+
+## 5. One named decision-maker
+
+The radar finds and ranks opportunities; it does not decide which to chase. We need
+one person who reviews the sheet and marks tenders **Approved** or **Rejected**.
+
+Everything downstream — document retrieval, deep analysis, bid drafting — only
+triggers on an approval. If nobody ticks the box, the pipeline sits idle.
+
+Please nominate: name, email, and roughly when they'll review (daily is ideal;
+tenders routinely close inside 10 business days).
+
+---
+
+## What we do from here
+
+Once items 1–3 arrive:
+
+1. We register you on every relevant portal and complete the category selections
+   (this is where most suppliers go wrong — Brisbane City Council only sends alerts
+   for the exact categories chosen at registration).
+2. We put you on the notification list for the next **Local Buy** cleaning and
+   security panel refresh. Local Buy panels accounted for roughly a third of the
+   relevant opportunities in our sample scan, and panel members receive direct
+   quote requests that never appear publicly. This is the highest-value single
+   action available to you.
+3. We switch the radar on and you start seeing matched tenders in your sheet and
+   in Slack.
+
+**Timing note:** the Brisbane City Council registration has a 2-business-day
+approval step and the follow-up questionnaire expires after 90 days, so the sooner
+item 3 reaches us, the sooner that one is locked in.
+
+---
+
+## Questions you may have
+
+**Do we need to pay for any tender subscription services?**
+No. We deliberately do not use paid tender aggregators — they resell opportunities
+that are already free on the official portals. In our testing, 19 of 23 relevant
+opportunities came through a single free source. You would be paying a monthly fee
+for the same information plus a lot of noise.
+
+**Who owns the data?**
+The tender sheet lives on our Google Drive during the engagement, and you have full
+access to it. If you'd like it transferred into your own Google account at any
+point, we'll hand it over.
+
+**What about our VendorPanel password?**
+Where we operate a portal account on your behalf, credentials are stored in an
+encrypted credential store and never in code or documents. If you'd prefer, we can
+run under a separate user account on your portal profile so you can revoke our
+access independently at any time.
