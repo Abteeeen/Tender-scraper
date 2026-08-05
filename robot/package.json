@@ -1,0 +1,20 @@
+{
+  "name": "vendorpanel-tender-robot",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Logs into VendorPanel, downloads approved tender packs, uploads them to Google Drive and writes the link back to the triage sheet.",
+  "scripts": {
+    "start": "node robot.mjs",
+    "watch": "cross-env HEADLESS=false node robot.mjs",
+    "dry": "cross-env HEADLESS=false DRY_RUN=true node robot.mjs"
+  },
+  "dependencies": {
+    "dotenv": "^16.4.5",
+    "googleapis": "^144.0.0",
+    "playwright": "^1.48.0"
+  },
+  "devDependencies": {
+    "cross-env": "^7.0.3"
+  }
+}
