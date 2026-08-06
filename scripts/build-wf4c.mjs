@@ -270,28 +270,43 @@ export default async function ({ page, context }) {
     return false;
   };
 
+  // Register the listener BEFORE clicking, so we catch the request the moment
+  // it is made rather than when it completes. VendorPanel spends ~21s building
+  // the zip server-side, and the free Browserless plan caps a session at 60s —
+  // so we grab the URL and let n8n fetch the bytes outside the browser.
+  let downloadUrl = null;
+  const urlSeen = new Promise((resolve) => {
+    const onReq = (req) => {
+      const u = req.url();
+      if (/FileDownloader|\.zip(\?|$)|blob\.core\.windows\.net/i.test(u)) {
+        try { page.off('request', onReq); } catch (e) {}
+        resolve(u);
+      }
+    };
+    page.on('request', onReq);
+    setTimeout(() => resolve(null), 30000);
+  });
+
   let pressed = false;
   for (let i = 0; i < 30 && !pressed; i++) {
     pressed = await pressDownload();
     if (!pressed) await new Promise((r) => setTimeout(r, 500));
   }
   if (!pressed) throw new Error('The download modal never showed a Download button');
-  note('pressed Download — waiting for the package to build');
+  note('pressed Download');
 
-  // VendorPanel builds the zip server-side ("Working on it..") — measured at
-  // about 21s. Wait for the actual file response rather than sleeping blindly:
-  // a fixed long sleep just burns the session and trips Browserless's timeout.
-  const gotFile = await page.waitForResponse(
-    (r) => /FileDownloader|\.zip(\?|$)|blob\.core\.windows\.net/i.test(r.url()),
-    { timeout: 150000 },
-  ).then((r) => r.url().slice(0, 120)).catch(() => null);
+  downloadUrl = await urlSeen;
+  if (!downloadUrl) throw new Error('Download was pressed but no package URL was requested');
+  note('package url captured');
 
-  if (!gotFile) throw new Error('package never arrived after pressing Download');
-  note('file response seen: ' + gotFile);
+  // Hand the session over too, in case the URL is not self-authenticating.
+  const cookies = await page.cookies();
+  const cookieHeader = cookies.map((c) => c.name + '=' + c.value).join('; ');
 
-  // small grace period so Chrome finishes writing it to disk
-  await new Promise((r) => setTimeout(r, 8000));
-  note('done: ' + log.join(' | '));
+  return {
+    data: { downloadUrl, cookieHeader, log },
+    type: 'application/json',
+  };
 }
 `;
 
@@ -337,21 +352,72 @@ nodes.push({
 nodes.push({
   parameters: {
     method: 'POST',
-    url: 'https://production-sfo.browserless.io/download?timeout=180000',
+    url: 'https://production-sfo.browserless.io/function?timeout=58000',
     authentication: 'genericCredentialType',
     genericAuthType: 'httpCustomAuth',
     sendBody: true,
     contentType: 'json',
     specifyBody: 'json',
     jsonBody: '={{ JSON.stringify({ code: $json.code }) }}',
+    options: { timeout: 90000 },
+  },
+  id: 'c-browserless', name: 'Browserless Find Package',
+  type: 'n8n-nodes-base.httpRequest', typeVersion: 4.2, position: at(),
+  credentials: cred('httpCustomAuth', 'Browserless + VendorPanel'),
+  onError: 'continueRegularOutput',
+});
+
+// ─────────────────────────────────────────── 5b read the browserless result
+nodes.push({
+  parameters: {
+    jsCode: `// Browserless /function replies { data, type }. Pull the package URL out.
+const out = [];
+const jobs = $('Have a VP Reference?').all();
+const items = $input.all();
+
+for (let i = 0; i < items.length; i++) {
+  const job = jobs[i]?.json || {};
+  const r = items[i].json || {};
+  const d = r.data || r;
+
+  if (!d || !d.downloadUrl) {
+    out.push({ json: { ...job, ok: false,
+      reason: 'Browserless did not return a package URL',
+      detail: JSON.stringify(r).slice(0, 900) } });
+    continue;
+  }
+
+  out.push({ json: { ...job, ok: true,
+    downloadUrl: d.downloadUrl,
+    cookieHeader: d.cookieHeader || '',
+    browserLog: d.log || [] } });
+}
+return out;`,
+  },
+  id: 'c-read', name: 'Read Package URL',
+  type: 'n8n-nodes-base.code', typeVersion: 2, position: at(),
+});
+
+// ────────────────────────────────────────────── 5c fetch the zip (no browser)
+// The chain ends at an Azure blob URL carrying its own SAS token, so this needs
+// no browser and no session cap. Cookies are sent anyway in case the first hop
+// (FileDownloader) still wants them.
+nodes.push({
+  parameters: {
+    url: '={{ $json.downloadUrl }}',
+    sendHeaders: true,
+    headerParameters: { parameters: [
+      { name: 'User-Agent', value: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36' },
+      { name: 'Cookie', value: '={{ $json.cookieHeader }}' },
+    ] },
     options: {
       response: { response: { responseFormat: 'file', outputPropertyName: 'data' } },
+      redirect: { redirect: { followRedirects: true, maxRedirects: 10 } },
       timeout: 300000,
     },
   },
-  id: 'c-browserless', name: 'Browserless Download',
+  id: 'c-fetch', name: 'Fetch Package',
   type: 'n8n-nodes-base.httpRequest', typeVersion: 4.2, position: at(),
-  credentials: cred('httpCustomAuth', 'Browserless + VendorPanel'),
   onError: 'continueRegularOutput',
 });
 
@@ -359,7 +425,7 @@ nodes.push({
 nodes.push({
   parameters: {
     jsCode: `const out = [];
-const jobs = $('Have a VP Reference?').all();
+const jobs = $('Read Package URL').all();
 const items = $input.all();
 
 for (let i = 0; i < items.length; i++) {
@@ -491,9 +557,11 @@ nodes.push({
 link('On Approval (Webhook)', 'Validate Payload');
 link('Validate Payload', 'Build Browser Script');
 link('Build Browser Script', 'Have a VP Reference?');
-link('Have a VP Reference?', 'Browserless Download', 0);
+link('Have a VP Reference?', 'Browserless Find Package', 0);
 link('Have a VP Reference?', 'Slack - Manual Download Needed', 1);
-link('Browserless Download', 'Name the File');
+link('Browserless Find Package', 'Read Package URL');
+link('Read Package URL', 'Fetch Package');
+link('Fetch Package', 'Name the File');
 link('Name the File', 'Got the Pack?');
 link('Got the Pack?', 'Upload to Drive', 0);
 link('Got the Pack?', 'Slack - Manual Download Needed', 1);

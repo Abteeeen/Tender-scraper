@@ -34,7 +34,7 @@
     },
     {
       "parameters": {
-        "jsCode": "// Bake the tender reference into the browser script. Credentials are NOT put\n// here — they arrive in Browserless's `context`, injected by the credential.\nconst SCRIPT = \"\\nexport default async function ({ page, context }) {\\n  const { UserName, Password } = context || {};\\n  if (!UserName || !Password) throw new Error('No credentials in context — check the Browserless credential');\\n\\n  const VP_REF = '__VP_REF__';\\n  const TITLE  = '__TITLE__';\\n  const log = [];\\n  const note = (m) => { log.push(m); console.log(m); };\\n\\n  page.setDefaultTimeout(45000);\\n  await page.setViewport({ width: 1400, height: 900 });\\n\\n  // ---- log in (2 steps: email -> Next -> password -> Next) ----------------\\n  await page.goto('https://www.vendorpanel.com.au/', { waitUntil: 'domcontentloaded' });\\n  await page.waitForSelector('#UserName', { visible: true });\\n  await page.type('#UserName', UserName, { delay: 20 });\\n  note('email entered');\\n\\n  await Promise.all([\\n    page.waitForNavigation({ waitUntil: 'domcontentloaded' }).catch(() => null),\\n    page.click('#btnGo'),\\n  ]);\\n\\n  await page.waitForSelector('#Password', { visible: true });\\n  await page.type('#Password', Password, { delay: 20 });\\n  note('password entered');\\n\\n  await Promise.all([\\n    page.waitForNavigation({ waitUntil: 'networkidle2' }).catch(() => null),\\n    page.click('#btnGo'),\\n  ]);\\n\\n  if (/account\\\\/login/i.test(page.url())) {\\n    throw new Error('login did not complete — still at ' + page.url());\\n  }\\n  note('logged in');\\n\\n  // ---- members' tender list ----------------------------------------------\\n  await page.goto('https://www.vendorpanel.com.au/Members/?do=Tenders:AllTenders',\\n    { waitUntil: 'networkidle2' });\\n  note('tender list loaded');\\n\\n  // The list is paginated (50 per page, ~8 pages). A followed tender is pinned\\n  // to the top of page 1, but an unfollowed one can be on any page — and we\\n  // have to follow it before the download icon becomes active. So: widen the\\n  // page size, then walk the pages until the tender turns up.\\n  //\\n  // The search box is deliberately unused: it matches on title text, so typing\\n  // a VP reference into it empties the list.\\n  await page.waitForNetworkIdle({ idleTime: 1500, timeout: 30000 }).catch(() => null);\\n\\n  // Show as many per page as the dropdown allows.\\n  const grew = await page.evaluate(() => {\\n    const sel = [...document.querySelectorAll('select')]\\n      .find((s) => [...s.options].every((o) => /^\\\\d+$/.test(o.value)) && s.options.length > 1);\\n    if (!sel) return 0;\\n    const biggest = [...sel.options].map((o) => Number(o.value)).sort((x, y) => y - x)[0];\\n    sel.value = String(biggest);\\n    sel.dispatchEvent(new Event('change', { bubbles: true }));\\n    return biggest;\\n  });\\n  if (grew) {\\n    await page.waitForNetworkIdle({ idleTime: 1500, timeout: 30000 }).catch(() => null);\\n    note('page size set to ' + grew);\\n  }\\n\\n  const findAndClick = (ref, title) => {\\n    const isIcon = (e) => {\\n      const s = (e.getAttribute('title') || '') + ' ' + (e.getAttribute('alt') || '') +\\n                ' ' + (e.getAttribute('aria-label') || '') + ' ' + (e.className || '') +\\n                ' ' + (e.getAttribute('src') || '') + ' ' + (e.getAttribute('href') || '') +\\n                ' ' + (e.getAttribute('onclick') || '');\\n      return /download|package/i.test(s);\\n    };\\n\\n    const bodyText = document.body.innerText || '';\\n    const needles = ['VP' + ref, title.slice(0, 40)].filter(Boolean);\\n    const present = needles.filter((n) => bodyText.includes(n));\\n\\n    // deepest element naming this tender\\n    let anchor = null;\\n    const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_ELEMENT);\\n    while (walker.nextNode()) {\\n      const el = walker.currentNode;\\n      if (el.children.length) continue;\\n      const t = (el.textContent || '').trim();\\n      if (!t) continue;\\n      if (t.includes('VP' + ref) || (title && t.includes(title.slice(0, 40)))) { anchor = el; break; }\\n    }\\n    if (!anchor) return { found: false, onThisPage: false, needlesPresent: present,\\n                          listLength: bodyText.length };\\n\\n    // walk up to the ancestor that also holds a download control\\n    let row = anchor, icon = null;\\n    for (let up = 0; up < 12 && row; up++) {\\n      icon = [...row.querySelectorAll('a, img, i, span, button, input')].find(isIcon);\\n      if (icon) break;\\n      row = row.parentElement;\\n    }\\n    if (!icon || !row) {\\n      return { found: false, onThisPage: true, reason: 'found the tender but no download control near it',\\n               needlesPresent: present,\\n               sample: (anchor.closest('tr') || anchor.parentElement || anchor).innerHTML.slice(0, 1200) };\\n    }\\n\\n    // must be Followed before the icon works\\n    const follow = [...row.querySelectorAll('a, span, div, label, input')]\\n      .find((e) => /^\\\\s*follow\\\\s*$/i.test((e.innerText || e.value || '').trim()));\\n    if (follow) follow.click();\\n\\n    return { found: true, onThisPage: true, followed: Boolean(follow),\\n             iconHtml: icon.outerHTML.slice(0, 200) };\\n  };\\n\\n  const gotoNextPage = () => {\\n    const nav = [...document.querySelectorAll('a, input, button, span')].find((e) => {\\n      const s = (e.getAttribute('title') || '') + ' ' + (e.getAttribute('aria-label') || '') +\\n                ' ' + (e.className || '') + ' ' + (e.id || '') + ' ' + (e.getAttribute('onclick') || '');\\n      const disabled = e.disabled || /disabled/i.test(e.className || '');\\n      return /next/i.test(s) && !/nextpageset|disabled/i.test(e.className || '') && !disabled;\\n    });\\n    if (!nav) return false;\\n    nav.click();\\n    return true;\\n  };\\n\\n  let clicked = { found: false };\\n  for (let pageNo = 1; pageNo <= 12; pageNo++) {\\n    clicked = await page.evaluate(findAndClick, VP_REF, TITLE);\\n    if (clicked.found || clicked.onThisPage) { note('found on page ' + pageNo); break; }\\n\\n    const moved = await page.evaluate(gotoNextPage);\\n    if (!moved) { note('no further pages after ' + pageNo); break; }\\n    await page.waitForNetworkIdle({ idleTime: 1500, timeout: 30000 }).catch(() => null);\\n  }\\n\\n  // Following changes the row, so re-locate and click the icon for real.\\n  if (clicked.found && clicked.followed) {\\n    await new Promise((r) => setTimeout(r, 3000));\\n    clicked = await page.evaluate(findAndClick, VP_REF, TITLE);\\n  }\\n\\n  if (clicked.found) {\\n    await page.evaluate((ref, title) => {\\n      const isIcon = (e) => {\\n        const s = (e.getAttribute('title') || '') + ' ' + (e.getAttribute('alt') || '') +\\n                  ' ' + (e.getAttribute('aria-label') || '') + ' ' + (e.className || '') +\\n                  ' ' + (e.getAttribute('src') || '') + ' ' + (e.getAttribute('href') || '') +\\n                  ' ' + (e.getAttribute('onclick') || '');\\n        return /download|package/i.test(s);\\n      };\\n      let anchor = null;\\n      const w = document.createTreeWalker(document.body, NodeFilter.SHOW_ELEMENT);\\n      while (w.nextNode()) {\\n        const el = w.currentNode;\\n        if (el.children.length) continue;\\n        const t = (el.textContent || '').trim();\\n        if (t.includes('VP' + ref) || (title && t.includes(title.slice(0, 40)))) { anchor = el; break; }\\n      }\\n      let row = anchor;\\n      for (let up = 0; up < 12 && row; up++) {\\n        const icon = [...row.querySelectorAll('a, img, i, span, button, input')].find(isIcon);\\n        if (icon) { icon.click(); return true; }\\n        row = row.parentElement;\\n      }\\n      return false;\\n    }, VP_REF, TITLE);\\n  }\\n\\n  if (!clicked.found) {\\n    throw new Error('Could not start the download: ' + (clicked.reason || 'tender not found on any page') +\\n      ' || needlesPresent=' + JSON.stringify(clicked.needlesPresent || []) +\\n      ' || listLength=' + (clicked.listLength ?? '?') +\\n      (clicked.sample ? ' || ROW=' + clicked.sample : ''));\\n  }\\n  note('clicked the download icon ' + (clicked.iconHtml || '') +\\n       (clicked.followed ? ' (followed first)' : ''));\\n\\n  // ---- the modal, which may be inline or in an iframe ---------------------\\n  const pressDownload = async () => {\\n    const targets = [page, ...page.frames()];\\n    for (const t of targets) {\\n      const hit = await t.evaluate(() => {\\n        const b = [...document.querySelectorAll('a, button, input[type=submit]')]\\n          .find((e) => /^\\\\s*download\\\\s*$/i.test(e.innerText || e.value || ''));\\n        if (!b) return false;\\n        b.click();\\n        return true;\\n      }).catch(() => false);\\n      if (hit) return true;\\n    }\\n    return false;\\n  };\\n\\n  let pressed = false;\\n  for (let i = 0; i < 30 && !pressed; i++) {\\n    pressed = await pressDownload();\\n    if (!pressed) await new Promise((r) => setTimeout(r, 500));\\n  }\\n  if (!pressed) throw new Error('The download modal never showed a Download button');\\n  note('pressed Download — waiting for the package to build');\\n\\n  // VendorPanel builds the zip server-side (\\\"Working on it..\\\") — measured at\\n  // about 21s. Wait for the actual file response rather than sleeping blindly:\\n  // a fixed long sleep just burns the session and trips Browserless's timeout.\\n  const gotFile = await page.waitForResponse(\\n    (r) => /FileDownloader|\\\\.zip(\\\\?|$)|blob\\\\.core\\\\.windows\\\\.net/i.test(r.url()),\\n    { timeout: 150000 },\\n  ).then((r) => r.url().slice(0, 120)).catch(() => null);\\n\\n  if (!gotFile) throw new Error('package never arrived after pressing Download');\\n  note('file response seen: ' + gotFile);\\n\\n  // small grace period so Chrome finishes writing it to disk\\n  await new Promise((r) => setTimeout(r, 8000));\\n  note('done: ' + log.join(' | '));\\n}\\n\";\n\nconst out = [];\nfor (const item of $input.all()) {\n  const j = item.json;\n  const code = SCRIPT\n    .replace('__VP_REF__', String(j.vpRef).replace(/[^0-9]/g, ''))\n    .replace('__TITLE__', String(j.title).replace(/['\"\\\\]/g, ' ').slice(0, 80));\n  out.push({ json: { ...j, code } });\n}\nreturn out;"
+        "jsCode": "// Bake the tender reference into the browser script. Credentials are NOT put\n// here — they arrive in Browserless's `context`, injected by the credential.\nconst SCRIPT = \"\\nexport default async function ({ page, context }) {\\n  const { UserName, Password } = context || {};\\n  if (!UserName || !Password) throw new Error('No credentials in context — check the Browserless credential');\\n\\n  const VP_REF = '__VP_REF__';\\n  const TITLE  = '__TITLE__';\\n  const log = [];\\n  const note = (m) => { log.push(m); console.log(m); };\\n\\n  page.setDefaultTimeout(45000);\\n  await page.setViewport({ width: 1400, height: 900 });\\n\\n  // ---- log in (2 steps: email -> Next -> password -> Next) ----------------\\n  await page.goto('https://www.vendorpanel.com.au/', { waitUntil: 'domcontentloaded' });\\n  await page.waitForSelector('#UserName', { visible: true });\\n  await page.type('#UserName', UserName, { delay: 20 });\\n  note('email entered');\\n\\n  await Promise.all([\\n    page.waitForNavigation({ waitUntil: 'domcontentloaded' }).catch(() => null),\\n    page.click('#btnGo'),\\n  ]);\\n\\n  await page.waitForSelector('#Password', { visible: true });\\n  await page.type('#Password', Password, { delay: 20 });\\n  note('password entered');\\n\\n  await Promise.all([\\n    page.waitForNavigation({ waitUntil: 'networkidle2' }).catch(() => null),\\n    page.click('#btnGo'),\\n  ]);\\n\\n  if (/account\\\\/login/i.test(page.url())) {\\n    throw new Error('login did not complete — still at ' + page.url());\\n  }\\n  note('logged in');\\n\\n  // ---- members' tender list ----------------------------------------------\\n  await page.goto('https://www.vendorpanel.com.au/Members/?do=Tenders:AllTenders',\\n    { waitUntil: 'networkidle2' });\\n  note('tender list loaded');\\n\\n  // The list is paginated (50 per page, ~8 pages). A followed tender is pinned\\n  // to the top of page 1, but an unfollowed one can be on any page — and we\\n  // have to follow it before the download icon becomes active. So: widen the\\n  // page size, then walk the pages until the tender turns up.\\n  //\\n  // The search box is deliberately unused: it matches on title text, so typing\\n  // a VP reference into it empties the list.\\n  await page.waitForNetworkIdle({ idleTime: 1500, timeout: 30000 }).catch(() => null);\\n\\n  // Show as many per page as the dropdown allows.\\n  const grew = await page.evaluate(() => {\\n    const sel = [...document.querySelectorAll('select')]\\n      .find((s) => [...s.options].every((o) => /^\\\\d+$/.test(o.value)) && s.options.length > 1);\\n    if (!sel) return 0;\\n    const biggest = [...sel.options].map((o) => Number(o.value)).sort((x, y) => y - x)[0];\\n    sel.value = String(biggest);\\n    sel.dispatchEvent(new Event('change', { bubbles: true }));\\n    return biggest;\\n  });\\n  if (grew) {\\n    await page.waitForNetworkIdle({ idleTime: 1500, timeout: 30000 }).catch(() => null);\\n    note('page size set to ' + grew);\\n  }\\n\\n  const findAndClick = (ref, title) => {\\n    const isIcon = (e) => {\\n      const s = (e.getAttribute('title') || '') + ' ' + (e.getAttribute('alt') || '') +\\n                ' ' + (e.getAttribute('aria-label') || '') + ' ' + (e.className || '') +\\n                ' ' + (e.getAttribute('src') || '') + ' ' + (e.getAttribute('href') || '') +\\n                ' ' + (e.getAttribute('onclick') || '');\\n      return /download|package/i.test(s);\\n    };\\n\\n    const bodyText = document.body.innerText || '';\\n    const needles = ['VP' + ref, title.slice(0, 40)].filter(Boolean);\\n    const present = needles.filter((n) => bodyText.includes(n));\\n\\n    // deepest element naming this tender\\n    let anchor = null;\\n    const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_ELEMENT);\\n    while (walker.nextNode()) {\\n      const el = walker.currentNode;\\n      if (el.children.length) continue;\\n      const t = (el.textContent || '').trim();\\n      if (!t) continue;\\n      if (t.includes('VP' + ref) || (title && t.includes(title.slice(0, 40)))) { anchor = el; break; }\\n    }\\n    if (!anchor) return { found: false, onThisPage: false, needlesPresent: present,\\n                          listLength: bodyText.length };\\n\\n    // walk up to the ancestor that also holds a download control\\n    let row = anchor, icon = null;\\n    for (let up = 0; up < 12 && row; up++) {\\n      icon = [...row.querySelectorAll('a, img, i, span, button, input')].find(isIcon);\\n      if (icon) break;\\n      row = row.parentElement;\\n    }\\n    if (!icon || !row) {\\n      return { found: false, onThisPage: true, reason: 'found the tender but no download control near it',\\n               needlesPresent: present,\\n               sample: (anchor.closest('tr') || anchor.parentElement || anchor).innerHTML.slice(0, 1200) };\\n    }\\n\\n    // must be Followed before the icon works\\n    const follow = [...row.querySelectorAll('a, span, div, label, input')]\\n      .find((e) => /^\\\\s*follow\\\\s*$/i.test((e.innerText || e.value || '').trim()));\\n    if (follow) follow.click();\\n\\n    return { found: true, onThisPage: true, followed: Boolean(follow),\\n             iconHtml: icon.outerHTML.slice(0, 200) };\\n  };\\n\\n  const gotoNextPage = () => {\\n    const nav = [...document.querySelectorAll('a, input, button, span')].find((e) => {\\n      const s = (e.getAttribute('title') || '') + ' ' + (e.getAttribute('aria-label') || '') +\\n                ' ' + (e.className || '') + ' ' + (e.id || '') + ' ' + (e.getAttribute('onclick') || '');\\n      const disabled = e.disabled || /disabled/i.test(e.className || '');\\n      return /next/i.test(s) && !/nextpageset|disabled/i.test(e.className || '') && !disabled;\\n    });\\n    if (!nav) return false;\\n    nav.click();\\n    return true;\\n  };\\n\\n  let clicked = { found: false };\\n  for (let pageNo = 1; pageNo <= 12; pageNo++) {\\n    clicked = await page.evaluate(findAndClick, VP_REF, TITLE);\\n    if (clicked.found || clicked.onThisPage) { note('found on page ' + pageNo); break; }\\n\\n    const moved = await page.evaluate(gotoNextPage);\\n    if (!moved) { note('no further pages after ' + pageNo); break; }\\n    await page.waitForNetworkIdle({ idleTime: 1500, timeout: 30000 }).catch(() => null);\\n  }\\n\\n  // Following changes the row, so re-locate and click the icon for real.\\n  if (clicked.found && clicked.followed) {\\n    await new Promise((r) => setTimeout(r, 3000));\\n    clicked = await page.evaluate(findAndClick, VP_REF, TITLE);\\n  }\\n\\n  if (clicked.found) {\\n    await page.evaluate((ref, title) => {\\n      const isIcon = (e) => {\\n        const s = (e.getAttribute('title') || '') + ' ' + (e.getAttribute('alt') || '') +\\n                  ' ' + (e.getAttribute('aria-label') || '') + ' ' + (e.className || '') +\\n                  ' ' + (e.getAttribute('src') || '') + ' ' + (e.getAttribute('href') || '') +\\n                  ' ' + (e.getAttribute('onclick') || '');\\n        return /download|package/i.test(s);\\n      };\\n      let anchor = null;\\n      const w = document.createTreeWalker(document.body, NodeFilter.SHOW_ELEMENT);\\n      while (w.nextNode()) {\\n        const el = w.currentNode;\\n        if (el.children.length) continue;\\n        const t = (el.textContent || '').trim();\\n        if (t.includes('VP' + ref) || (title && t.includes(title.slice(0, 40)))) { anchor = el; break; }\\n      }\\n      let row = anchor;\\n      for (let up = 0; up < 12 && row; up++) {\\n        const icon = [...row.querySelectorAll('a, img, i, span, button, input')].find(isIcon);\\n        if (icon) { icon.click(); return true; }\\n        row = row.parentElement;\\n      }\\n      return false;\\n    }, VP_REF, TITLE);\\n  }\\n\\n  if (!clicked.found) {\\n    throw new Error('Could not start the download: ' + (clicked.reason || 'tender not found on any page') +\\n      ' || needlesPresent=' + JSON.stringify(clicked.needlesPresent || []) +\\n      ' || listLength=' + (clicked.listLength ?? '?') +\\n      (clicked.sample ? ' || ROW=' + clicked.sample : ''));\\n  }\\n  note('clicked the download icon ' + (clicked.iconHtml || '') +\\n       (clicked.followed ? ' (followed first)' : ''));\\n\\n  // ---- the modal, which may be inline or in an iframe ---------------------\\n  const pressDownload = async () => {\\n    const targets = [page, ...page.frames()];\\n    for (const t of targets) {\\n      const hit = await t.evaluate(() => {\\n        const b = [...document.querySelectorAll('a, button, input[type=submit]')]\\n          .find((e) => /^\\\\s*download\\\\s*$/i.test(e.innerText || e.value || ''));\\n        if (!b) return false;\\n        b.click();\\n        return true;\\n      }).catch(() => false);\\n      if (hit) return true;\\n    }\\n    return false;\\n  };\\n\\n  // Register the listener BEFORE clicking, so we catch the request the moment\\n  // it is made rather than when it completes. VendorPanel spends ~21s building\\n  // the zip server-side, and the free Browserless plan caps a session at 60s —\\n  // so we grab the URL and let n8n fetch the bytes outside the browser.\\n  let downloadUrl = null;\\n  const urlSeen = new Promise((resolve) => {\\n    const onReq = (req) => {\\n      const u = req.url();\\n      if (/FileDownloader|\\\\.zip(\\\\?|$)|blob\\\\.core\\\\.windows\\\\.net/i.test(u)) {\\n        try { page.off('request', onReq); } catch (e) {}\\n        resolve(u);\\n      }\\n    };\\n    page.on('request', onReq);\\n    setTimeout(() => resolve(null), 30000);\\n  });\\n\\n  let pressed = false;\\n  for (let i = 0; i < 30 && !pressed; i++) {\\n    pressed = await pressDownload();\\n    if (!pressed) await new Promise((r) => setTimeout(r, 500));\\n  }\\n  if (!pressed) throw new Error('The download modal never showed a Download button');\\n  note('pressed Download');\\n\\n  downloadUrl = await urlSeen;\\n  if (!downloadUrl) throw new Error('Download was pressed but no package URL was requested');\\n  note('package url captured');\\n\\n  // Hand the session over too, in case the URL is not self-authenticating.\\n  const cookies = await page.cookies();\\n  const cookieHeader = cookies.map((c) => c.name + '=' + c.value).join('; ');\\n\\n  return {\\n    data: { downloadUrl, cookieHeader, log },\\n    type: 'application/json',\\n  };\\n}\\n\";\n\nconst out = [];\nfor (const item of $input.all()) {\n  const j = item.json;\n  const code = SCRIPT\n    .replace('__VP_REF__', String(j.vpRef).replace(/[^0-9]/g, ''))\n    .replace('__TITLE__', String(j.title).replace(/['\"\\\\]/g, ' ').slice(0, 80));\n  out.push({ json: { ...j, code } });\n}\nreturn out;"
       },
       "id": "c-script",
       "name": "Build Browser Script",
@@ -80,7 +80,7 @@
     {
       "parameters": {
         "method": "POST",
-        "url": "https://production-sfo.browserless.io/download?timeout=180000",
+        "url": "https://production-sfo.browserless.io/function?timeout=58000",
         "authentication": "genericCredentialType",
         "genericAuthType": "httpCustomAuth",
         "sendBody": true,
@@ -88,17 +88,11 @@
         "specifyBody": "json",
         "jsonBody": "={{ JSON.stringify({ code: $json.code }) }}",
         "options": {
-          "response": {
-            "response": {
-              "responseFormat": "file",
-              "outputPropertyName": "data"
-            }
-          },
-          "timeout": 300000
+          "timeout": 90000
         }
       },
       "id": "c-browserless",
-      "name": "Browserless Download",
+      "name": "Browserless Find Package",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
@@ -115,14 +109,69 @@
     },
     {
       "parameters": {
-        "jsCode": "const out = [];\nconst jobs = $('Have a VP Reference?').all();\nconst items = $input.all();\n\nfor (let i = 0; i < items.length; i++) {\n  const job = jobs[i]?.json || {};\n  const bin = items[i].binary?.data;\n\n  if (!bin) {\n    // Browserless returned JSON (an error) rather than a file.\n    out.push({ json: { ...job, ok: false,\n      reason: 'no file came back from Browserless',\n      detail: JSON.stringify(items[i].json).slice(0, 900) } });\n    continue;\n  }\n\n  const base = String(job.ref || ('VP' + job.vpRef) || job.rowId || job.title)\n    .slice(0, 60).replace(/[\\\\/:*?\"<>|]/g, '_').trim();\n\n  let ext = bin.fileExtension || '';\n  if (!ext) {\n    const mime = bin.mimeType || '';\n    ext = /zip/i.test(mime) ? 'zip' : /pdf/i.test(mime) ? 'pdf' : 'zip';\n  }\n\n  out.push({ json: { ...job, ok: true, fileName: base + '_pack.' + ext }, binary: items[i].binary });\n}\nreturn out;"
+        "jsCode": "// Browserless /function replies { data, type }. Pull the package URL out.\nconst out = [];\nconst jobs = $('Have a VP Reference?').all();\nconst items = $input.all();\n\nfor (let i = 0; i < items.length; i++) {\n  const job = jobs[i]?.json || {};\n  const r = items[i].json || {};\n  const d = r.data || r;\n\n  if (!d || !d.downloadUrl) {\n    out.push({ json: { ...job, ok: false,\n      reason: 'Browserless did not return a package URL',\n      detail: JSON.stringify(r).slice(0, 900) } });\n    continue;\n  }\n\n  out.push({ json: { ...job, ok: true,\n    downloadUrl: d.downloadUrl,\n    cookieHeader: d.cookieHeader || '',\n    browserLog: d.log || [] } });\n}\nreturn out;"
+      },
+      "id": "c-read",
+      "name": "Read Package URL",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1510,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "url": "={{ $json.downloadUrl }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "User-Agent",
+              "value": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36"
+            },
+            {
+              "name": "Cookie",
+              "value": "={{ $json.cookieHeader }}"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "file",
+              "outputPropertyName": "data"
+            }
+          },
+          "redirect": {
+            "redirect": {
+              "followRedirects": true,
+              "maxRedirects": 10
+            }
+          },
+          "timeout": 300000
+        }
+      },
+      "id": "c-fetch",
+      "name": "Fetch Package",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1760,
+        300
+      ],
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const out = [];\nconst jobs = $('Read Package URL').all();\nconst items = $input.all();\n\nfor (let i = 0; i < items.length; i++) {\n  const job = jobs[i]?.json || {};\n  const bin = items[i].binary?.data;\n\n  if (!bin) {\n    // Browserless returned JSON (an error) rather than a file.\n    out.push({ json: { ...job, ok: false,\n      reason: 'no file came back from Browserless',\n      detail: JSON.stringify(items[i].json).slice(0, 900) } });\n    continue;\n  }\n\n  const base = String(job.ref || ('VP' + job.vpRef) || job.rowId || job.title)\n    .slice(0, 60).replace(/[\\\\/:*?\"<>|]/g, '_').trim();\n\n  let ext = bin.fileExtension || '';\n  if (!ext) {\n    const mime = bin.mimeType || '';\n    ext = /zip/i.test(mime) ? 'zip' : /pdf/i.test(mime) ? 'pdf' : 'zip';\n  }\n\n  out.push({ json: { ...job, ok: true, fileName: base + '_pack.' + ext }, binary: items[i].binary });\n}\nreturn out;"
       },
       "id": "c-name",
       "name": "Name the File",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        1510,
+        2010,
         300
       ]
     },
@@ -154,7 +203,7 @@
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.2,
       "position": [
-        1760,
+        2260,
         300
       ]
     },
@@ -180,7 +229,7 @@
       "type": "n8n-nodes-base.googleDrive",
       "typeVersion": 3,
       "position": [
-        2010,
+        2510,
         300
       ],
       "credentials": {
@@ -199,7 +248,7 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        2260,
+        2760,
         300
       ]
     },
@@ -233,7 +282,7 @@
       "type": "n8n-nodes-base.googleSheets",
       "typeVersion": 4.5,
       "position": [
-        2510,
+        3010,
         300
       ],
       "credentials": {
@@ -259,7 +308,7 @@
       "type": "n8n-nodes-base.slack",
       "typeVersion": 2.2,
       "position": [
-        2760,
+        3260,
         500
       ],
       "credentials": {
@@ -336,7 +385,7 @@
       "main": [
         [
           {
-            "node": "Browserless Download",
+            "node": "Browserless Find Package",
             "type": "main",
             "index": 0
           }
@@ -350,7 +399,29 @@
         ]
       ]
     },
-    "Browserless Download": {
+    "Browserless Find Package": {
+      "main": [
+        [
+          {
+            "node": "Read Package URL",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read Package URL": {
+      "main": [
+        [
+          {
+            "node": "Fetch Package",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch Package": {
       "main": [
         [
           {
