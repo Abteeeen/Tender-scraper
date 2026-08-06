@@ -472,8 +472,27 @@ nodes.push({
 nodes.push({
   parameters: {
     jsCode: `// One item per tender, each carrying the session cookie.
+//
+// The Link stored in the sheet is the PUBLIC url (tsi.axd), which redirects to
+// PublicTenderAccess.aspx — a "Request Access" form with no documents on it.
+// The members' entry point is /fpt.axd?g=<guid>, and that guid is simply the
+// RowID with dashes put back in. Use it when we can derive it.
 const s = $json;
-return (s.tenders || []).map(t => ({ json: { ...t, cookieHeader: s.cookieHeader } }));`,
+
+const toGuid = (id) => {
+  const h = String(id || '').replace(/-/g, '').toLowerCase();
+  if (!/^[0-9a-f]{32}$/.test(h)) return '';
+  return h.slice(0, 8) + '-' + h.slice(8, 12) + '-' + h.slice(12, 16) + '-' +
+         h.slice(16, 20) + '-' + h.slice(20);
+};
+
+return (s.tenders || []).map((t) => {
+  const guid = toGuid(t.rowId);
+  const memberUrl = guid
+    ? 'https://www.vendorpanel.com.au/fpt.axd?g=' + guid
+    : t.link;
+  return { json: { ...t, cookieHeader: s.cookieHeader, memberUrl, guid, publicUrl: t.link } };
+});`,
   },
   id: 'b-fan', name: 'One Item Per Tender',
   type: 'n8n-nodes-base.code', typeVersion: 2, position: at(),
@@ -482,7 +501,7 @@ return (s.tenders || []).map(t => ({ json: { ...t, cookieHeader: s.cookieHeader 
 // ────────────────────────────────────────────────────────── 12 GET tender
 nodes.push({
   parameters: {
-    url: '={{ $json.link }}',
+    url: '={{ $json.memberUrl }}',
     sendHeaders: true,
     headerParameters: {
       parameters: [
@@ -559,12 +578,22 @@ for (let i = 0; i < items.length; i++) {
       .slice(0, 6)
       .map((a) => a.text.slice(0, 40) + ' -> ' + a.href.slice(0, 120));
 
+    const needsAccess = /Request\\s*Access|PublicTenderAccess/i.test(html);
+    const loggedOut = /type="password"|Account\\/Login|fpt\\.axd/i.test(html) && !needsAccess;
+
     out.push({ json: {
       ...job, ok: false,
-      reason: /type="password"|Account\\/Login/i.test(html)
-        ? 'session was not accepted on the tender page'
-        : 'no download link found in the page',
+      reason: needsAccess
+        ? 'this tender requires "Request Access" — the buyer must grant it before documents appear'
+        : loggedOut
+          ? 'session was not accepted on the tender page'
+          : 'no download link found in the page',
+      needsAccess,
       candidates: hint,
+      anchorCount: anchors.length,
+      htmlLength: html.length,
+      pageTitle: (html.match(/<title>([\\s\\S]*?)<\\/title>/i) || [])[1]?.replace(/\\s+/g, ' ').trim() || '',
+      allAnchors: anchors.slice(0, 25).map((a) => (a.text || '(no text)').slice(0, 35) + ' -> ' + a.href.slice(0, 110)),
       httpStatus: res.statusCode,
     } });
   }
