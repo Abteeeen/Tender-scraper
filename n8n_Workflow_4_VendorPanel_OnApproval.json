@@ -1,5 +1,5 @@
 {
-  "name": "Workflow 4 — VendorPanel Download (triggered on approval)",
+  "name": "Workflow 4 \u2014 VendorPanel Download (triggered on approval)",
   "nodes": [
     {
       "parameters": {
@@ -21,7 +21,7 @@
     },
     {
       "parameters": {
-        "jsCode": "// Apps Script posts one approved row. Validate it before we spend a login on it.\nconst b = $json.body || $json;\n\nconst tender = {\n  rowId: String(b.rowId || '').trim(),\n  title: String(b.title || '').trim(),\n  ref:   String(b.ref || '').trim(),\n  link:  String(b.link || '').trim(),\n  source: String(b.source || '').trim(),\n};\n\nif (!/^https?:\\/\\//i.test(tender.link)) {\n  throw new Error('Webhook payload has no usable Link: ' + JSON.stringify(b).slice(0, 300));\n}\nif (!/vendorpanel/i.test(tender.source)) {\n  // Not a VendorPanel tender — nothing for this workflow to fetch.\n  return [];\n}\n\nreturn [{ json: { tenders: [tender], count: 1 } }];"
+        "jsCode": "// Apps Script posts one approved row. Validate it before we spend a login on it.\nconst b = $json.body || $json;\n\nconst tender = {\n  rowId: String(b.rowId || '').trim(),\n  title: String(b.title || '').trim(),\n  ref:   String(b.ref || '').trim(),\n  link:  String(b.link || '').trim(),\n  source: String(b.source || '').trim(),\n};\n\nif (!/^https?:\\/\\//i.test(tender.link)) {\n  throw new Error('Webhook payload has no usable Link: ' + JSON.stringify(b).slice(0, 300));\n}\nif (!/vendorpanel/i.test(tender.source)) {\n  // Not a VendorPanel tender \u2014 nothing for this workflow to fetch.\n  return [];\n}\n\nreturn [{ json: { tenders: [tender], count: 1 } }];"
       },
       "id": "b-valid",
       "name": "Validate Payload",
@@ -70,7 +70,7 @@
     },
     {
       "parameters": {
-        "jsCode": "\n// --- tiny helpers -----------------------------------------------------------\n// Merge Set-Cookie headers into a cookie jar we carry by hand. n8n's HTTP node\n// has no cookie jar of its own, so we do this explicitly at every hop.\nfunction mergeCookies(jar, setCookie) {\n  const out = { ...(jar || {}) };\n  const list = Array.isArray(setCookie) ? setCookie : (setCookie ? [setCookie] : []);\n  for (const raw of list) {\n    const first = String(raw).split(';')[0];\n    const eq = first.indexOf('=');\n    if (eq < 1) continue;\n    const name = first.slice(0, eq).trim();\n    const val = first.slice(eq + 1).trim();\n    if (!name) continue;\n    if (val === '' || /expires=Thu, 01 Jan 1970/i.test(raw)) delete out[name];\n    else out[name] = val;\n  }\n  return out;\n}\nconst jarToHeader = (jar) => Object.entries(jar || {}).map(([k, v]) => k + '=' + v).join('; ');\n\n// Pull a hidden input's value out of raw HTML.\nfunction hidden(html, name) {\n  const re = new RegExp('<input[^>]*name=\"' + name + '\"[^>]*>', 'i');\n  const tag = (html || '').match(re);\n  if (!tag) return '';\n  const v = tag[0].match(/value=\"([^\"]*)\"/i);\n  return v ? v[1].replace(/&amp;/g, '&').replace(/&quot;/g, '\"').replace(/&#39;/g, \"'\") : '';\n}\n\nconst res  = $json;\nconst html = String(res.body || '');\nconst jar  = mergeCookies({}, res.headers?.['set-cookie']);\n\nconst form = {\n  __RequestVerificationToken: hidden(html, '__RequestVerificationToken'),\n  ReturnUrl:                  hidden(html, 'ReturnUrl'),\n  ClientId:                   hidden(html, 'ClientId') || 'vp.client',\n  SiteFlag:                   hidden(html, 'SiteFlag') || 'Unknown',\n  UsernameHasBeenChecked:     'False',\n  OneTimePasswordRequired:    'False',\n  MFAEnrollmentRequired:      'False',\n  PasswordVerified:           'False',\n  ExternalLoginScheme:        '',\n  ExtenalLoginDisplayName:    '',\n  RememberLogin:              'false',\n};\n\nif (!form.__RequestVerificationToken) {\n  throw new Error('No __RequestVerificationToken on the login page — the form has changed.');\n}\n\nreturn [{ json: {\n  tenders: $('Validate Payload').first().json.tenders,\n  form,\n  cookieHeader: jarToHeader(jar),\n  jar,\n} }];"
+        "jsCode": "\n// --- tiny helpers -----------------------------------------------------------\n// Merge Set-Cookie headers into a cookie jar we carry by hand. n8n's HTTP node\n// has no cookie jar of its own, so we do this explicitly at every hop.\nfunction mergeCookies(jar, setCookie) {\n  const out = { ...(jar || {}) };\n  const list = Array.isArray(setCookie) ? setCookie : (setCookie ? [setCookie] : []);\n  for (const raw of list) {\n    const first = String(raw).split(';')[0];\n    const eq = first.indexOf('=');\n    if (eq < 1) continue;\n    const name = first.slice(0, eq).trim();\n    const val = first.slice(eq + 1).trim();\n    if (!name) continue;\n    if (val === '' || /expires=Thu, 01 Jan 1970/i.test(raw)) delete out[name];\n    else out[name] = val;\n  }\n  return out;\n}\nconst jarToHeader = (jar) => Object.entries(jar || {}).map(([k, v]) => k + '=' + v).join('; ');\n\n// Pull a hidden input's value out of raw HTML.\nfunction hidden(html, name) {\n  const re = new RegExp('<input[^>]*name=\"' + name + '\"[^>]*>', 'i');\n  const tag = (html || '').match(re);\n  if (!tag) return '';\n  const v = tag[0].match(/value=\"([^\"]*)\"/i);\n  return v ? v[1].replace(/&amp;/g, '&').replace(/&quot;/g, '\"').replace(/&#39;/g, \"'\") : '';\n}\n\nconst res  = $json;\nconst html = String(res.body || '');\nconst jar  = mergeCookies({}, res.headers?.['set-cookie']);\n\nconst form = {\n  __RequestVerificationToken: hidden(html, '__RequestVerificationToken'),\n  ReturnUrl:                  hidden(html, 'ReturnUrl'),\n  ClientId:                   hidden(html, 'ClientId') || 'vp.client',\n  SiteFlag:                   hidden(html, 'SiteFlag') || 'Unknown',\n  UsernameHasBeenChecked:     'False',\n  OneTimePasswordRequired:    'False',\n  MFAEnrollmentRequired:      'False',\n  PasswordVerified:           'False',\n  ExternalLoginScheme:        '',\n  ExtenalLoginDisplayName:    '',\n  RememberLogin:              'false',\n};\n\nif (!form.__RequestVerificationToken) {\n  throw new Error('No __RequestVerificationToken on the login page \u2014 the form has changed.');\n}\n\nreturn [{ json: {\n  tenders: $('Validate Payload').first().json.tenders,\n  form,\n  cookieHeader: jarToHeader(jar),\n  jar,\n} }];"
       },
       "id": "b-parse1",
       "name": "Parse Login Form",
@@ -114,10 +114,6 @@
         "contentType": "form-urlencoded",
         "bodyParameters": {
           "parameters": [
-            {
-              "name": "UserName",
-              "value": "={{ $env.VP_USER }}"
-            },
             {
               "name": "__RequestVerificationToken",
               "value": "={{ $json.form.__RequestVerificationToken }}"
@@ -177,7 +173,9 @@
             }
           },
           "timeout": 45000
-        }
+        },
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpCustomAuth"
       },
       "id": "b-post1",
       "name": "POST Username",
@@ -186,7 +184,13 @@
       "position": [
         1160,
         300
-      ]
+      ],
+      "credentials": {
+        "httpCustomAuth": {
+          "id": "REPLACE_ME",
+          "name": "VendorPanel Login"
+        }
+      }
     },
     {
       "parameters": {
@@ -234,14 +238,6 @@
         "contentType": "form-urlencoded",
         "bodyParameters": {
           "parameters": [
-            {
-              "name": "UserName",
-              "value": "={{ $env.VP_USER }}"
-            },
-            {
-              "name": "Password",
-              "value": "={{ $env.VP_PASS }}"
-            },
             {
               "name": "__RequestVerificationToken",
               "value": "={{ $json.form.__RequestVerificationToken }}"
@@ -297,7 +293,9 @@
             }
           },
           "timeout": 45000
-        }
+        },
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpCustomAuth"
       },
       "id": "b-post2",
       "name": "POST Password",
@@ -306,7 +304,13 @@
       "position": [
         1620,
         300
-      ]
+      ],
+      "credentials": {
+        "httpCustomAuth": {
+          "id": "REPLACE_ME",
+          "name": "VendorPanel Login"
+        }
+      }
     },
     {
       "parameters": {
@@ -513,7 +517,7 @@
           "__rl": true,
           "value": "root",
           "mode": "list",
-          "cachedResultName": "/ ← CHANGE ME to Tender Packs"
+          "cachedResultName": "/ \u2190 CHANGE ME to Tender Packs"
         },
         "options": {}
       },
@@ -593,7 +597,7 @@
           "value": "#tenders",
           "mode": "name"
         },
-        "text": "=📦 *Tender pack retrieved*\n\n*{{ $json.title }}*\n{{ $json.DocumentLink }}\n\n_Deep analysis runs within 5 minutes._",
+        "text": "=\ud83d\udce6 *Tender pack retrieved*\n\n*{{ $json.title }}*\n{{ $json.DocumentLink }}\n\n_Deep analysis runs within 5 minutes._",
         "otherOptions": {}
       },
       "id": "b-ok",
@@ -620,7 +624,7 @@
           "value": "#tenders",
           "mode": "name"
         },
-        "text": "=⚠️ *VendorPanel login failed*\n\nReason: {{ $json.reason }}\nCookies seen: {{ $json.cookieNames }}\n\n_Nothing was downloaded this run._",
+        "text": "=\u26a0\ufe0f *VendorPanel login failed*\n\nReason: {{ $json.reason }}\nCookies seen: {{ $json.cookieNames }}\n\n_Nothing was downloaded this run._",
         "otherOptions": {}
       },
       "id": "b-failLogin",
@@ -647,7 +651,7 @@
           "value": "#tenders",
           "mode": "name"
         },
-        "text": "=⚠️ *Could not auto-download this pack*\n\n*{{ $json.title }}*\n{{ $json.link }}\n\nReason: {{ $json.reason }}\n\n_Fetch it by hand and paste the Drive link into DocumentLink._",
+        "text": "=\u26a0\ufe0f *Could not auto-download this pack*\n\n*{{ $json.title }}*\n{{ $json.link }}\n\nReason: {{ $json.reason }}\n\n_Fetch it by hand and paste the Drive link into DocumentLink._",
         "otherOptions": {}
       },
       "id": "b-failPack",
