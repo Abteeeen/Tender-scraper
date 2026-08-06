@@ -20,6 +20,11 @@ const cred = (t, n) => ({ [t]: { id: 'REPLACE_ME', name: n } });
 
 const nodes = [];
 const conn = {};
+const linkAi = (from, to, kind = 'ai_languageModel') => {
+  conn[from] = conn[from] || {};
+  conn[from][kind] = conn[from][kind] || [[]];
+  conn[from][kind][0].push({ node: to, type: kind, index: 0 });
+};
 const link = (from, to, out = 0) => {
   conn[from] = conn[from] || { main: [] };
   while (conn[from].main.length <= out) conn[from].main.push([]);
@@ -553,6 +558,223 @@ nodes.push({
   credentials: cred('slackApi', 'Slack account'), onError: 'continueRegularOutput',
 });
 
+
+// ═══════════════════════════════════════════════ deep analysis (was Workflow 2)
+// Runs off the SAME in-memory zip we just downloaded — no Drive round-trip.
+
+nodes.push({
+  parameters: {},
+  id: 'c-unzip', name: 'Unzip Tender Pack',
+  type: 'n8n-nodes-base.compression', typeVersion: 1.1, position: at(1),
+  onError: 'continueRegularOutput',
+});
+
+nodes.push({
+  parameters: {
+    jsCode: `// Pick the documents worth reading, wherever they sit in the archive.
+//
+// A real pack looks like:
+//   VP517599/Request Summary Report.pdf
+//   VP517599/RequestDocs/Attachment_B-Specifications_and_Requirements.pdf
+//   VP517599/RequestDocs/QPS23388_ITO_Part_A.pdf   ... 8 files, nested
+//
+// So never address files positionally (file_1, file_2...) — the order and depth
+// vary by buyer. Score them by filename and take the most informative few.
+const out = [];
+const job = $('Name the File').first().json;
+
+const score = (name) => {
+  const n = name.toLowerCase();
+  if (/spec|requirement|scope|statement of work|sow/.test(n)) return 100;
+  if (/ito|invitation|rft|rfq|tender|part[_ -]?a/.test(n))    return 90;
+  if (/condition|terms|contract|deed/.test(n))                return 60;
+  if (/summary/.test(n))                                      return 55;
+  if (/pricing|schedule|rates/.test(n))                        return 50;
+  if (/confidential|privacy|conflict/.test(n))                 return 10;
+  return 30;
+};
+
+for (const item of $input.all()) {
+  const bins = item.binary || {};
+  const files = Object.entries(bins).map(([key, b]) => ({
+    key,
+    name: b.fileName || key,
+    mime: b.mimeType || '',
+  }));
+
+  // PDFs carry the substance; spreadsheets are pricing templates with little prose
+  const pdfs = files
+    .filter((f) => /pdf/i.test(f.mime) || /\\.pdf$/i.test(f.name))
+    .sort((a, b) => score(b.name) - score(a.name))
+    .slice(0, 5);
+
+  if (!pdfs.length) {
+    out.push({ json: { ...job, ok: false,
+      reason: 'no PDFs found in the pack',
+      filesSeen: files.map((f) => f.name).slice(0, 20) } });
+    continue;
+  }
+
+  // one item per document, each with its binary under "data" so a single
+  // Extract From File node can process them all
+  pdfs.forEach((f, i) => {
+    out.push({
+      json: { ...job, ok: true, docName: f.name, docIndex: i, docCount: pdfs.length,
+              allFiles: files.map((x) => x.name) },
+      binary: { data: bins[f.key] },
+    });
+  });
+}
+return out;`,
+  },
+  id: 'c-pick', name: 'Select Documents',
+  type: 'n8n-nodes-base.code', typeVersion: 2, position: at(1),
+});
+
+nodes.push({
+  parameters: { operation: 'pdf', binaryPropertyName: 'data', options: {} },
+  id: 'c-pdf', name: 'Extract PDF Text',
+  type: 'n8n-nodes-base.extractFromFile', typeVersion: 1, position: at(1),
+  onError: 'continueRegularOutput',
+});
+
+nodes.push({
+  parameters: {
+    jsCode: `// Stitch the documents together for the model, biggest-signal first.
+const job = $('Name the File').first().json;
+const picked = $('Select Documents').all();
+
+let combined = '';
+const used = [];
+$input.all().forEach((item, i) => {
+  const name = picked[i]?.json?.docName || ('document ' + (i + 1));
+  const text = (item.json.text || '').toString();
+  if (!text.trim()) return;
+  used.push(name);
+  combined += '\\n\\n===== ' + name + ' =====\\n' + text;
+});
+
+if (!combined.trim()) {
+  return [{ json: { ...job, ok: false, reason: 'no text could be extracted from the PDFs' } }];
+}
+
+return [{ json: {
+  ...job,
+  ok: true,
+  documentsUsed: used,
+  allFiles: picked[0]?.json?.allFiles || [],
+  doc_text: combined.replace(/[\\t ]+/g, ' ').slice(0, 250000),
+} }];`,
+  },
+  id: 'c-combine', name: 'Combine Document Text',
+  type: 'n8n-nodes-base.code', typeVersion: 2, position: at(1),
+});
+
+nodes.push({
+  parameters: {
+    promptType: 'define',
+    text: '=You are a tender analyst for a South East Queensland SECURITY (manpower guarding + electronic/CCTV) and COMMERCIAL CLEANING contractor. Read the full tender document below and extract the exact, contract-critical requirements. Where a value is not stated, use "Not stated" — never invent.\n\nReturn ONLY a valid JSON object (no markdown, no code fences, no prose):\n{\n  "compliance_requirements": "every licence, certification, clearance, insurance level and registration required",\n  "pricing_matrix": "the pricing/schedule-of-rates structure — line items, units, GST, escalation clauses",\n  "scope_of_work": "4-6 sentence precise description of work, sites, hours/roster and deliverables",\n  "kpis_slas": "performance indicators, response times, reporting obligations",\n  "submission_requirements": "forms, referees, page limits, lodgement method",\n  "evaluation_criteria": "assessment criteria and weightings if given",\n  "red_flags": "incumbent advantage, prequalification, unusual indemnities, tight timeframe",\n  "bid_strategy": "3-5 sentences of practical advice on positioning a competitive bid"\n}\n\nTender: {{ $json.title }}\nDocuments read: {{ $json.documentsUsed }}\n\nTENDER DOCUMENT:\n{{ $json.doc_text }}',
+    hasOutputParser: false,
+  },
+  id: 'c-llm', name: 'Deep Analysis',
+  type: '@n8n/n8n-nodes-langchain.chainLlm', typeVersion: 1.4, position: at(1),
+});
+
+nodes.push({
+  parameters: {
+    model: { __rl: true, value: 'gpt-4.1-mini', mode: 'list', cachedResultName: 'gpt-4.1-mini' },
+    options: { temperature: 0.3 },
+  },
+  id: 'c-model', name: 'OpenAI Chat Model',
+  type: '@n8n/n8n-nodes-langchain.lmChatOpenAi', typeVersion: 1.2, position: [260 + 11 * 250, 300 + 2 * 200],
+  credentials: cred('openAiApi', 'n8n free OpenAI API credits'),
+});
+
+nodes.push({
+  parameters: {
+    mode: 'runOnceForEachItem',
+    jsCode: `let raw = ($json.text || '').toString().replace(/\`\`\`json/gi, '').replace(/\`\`\`/g, '').trim();
+let a;
+try { a = JSON.parse(raw); } catch (e) { a = { parse_error: true, scope_of_work: raw.slice(0, 500) }; }
+
+const meta = $('Combine Document Text').first().json;
+const cap = new Date().toLocaleString('en-AU', { timeZone: 'Australia/Brisbane' });
+
+return { json: {
+  RowID: meta.rowId || '',
+  Title: meta.title || '',
+  Analyzed: cap,
+  ComplianceRequirements: a.compliance_requirements || '',
+  PricingMatrix: a.pricing_matrix || '',
+  ScopeOfWork: a.scope_of_work || '',
+  KPIs_SLAs: a.kpis_slas || '',
+  SubmissionRequirements: a.submission_requirements || '',
+  EvaluationCriteria: a.evaluation_criteria || '',
+  RedFlags: a.red_flags || '',
+  BidStrategy: a.bid_strategy || '',
+  DocumentsRead: (meta.documentsUsed || []).join(' | '),
+  Link: meta.link || '',
+} };`,
+  },
+  id: 'c-parse', name: 'Parse Deep Analysis',
+  type: 'n8n-nodes-base.code', typeVersion: 2, position: at(1),
+});
+
+nodes.push({
+  parameters: {
+    operation: 'append',
+    documentId: { __rl: true, value: SHEET_ID, mode: 'id' },
+    sheetName: { __rl: true, value: 'Deep Analysis', mode: 'name' },
+    columns: {
+      mappingMode: 'defineBelow',
+      value: {
+        RowID: '={{ $json.RowID }}', Title: '={{ $json.Title }}', Analyzed: '={{ $json.Analyzed }}',
+        ComplianceRequirements: '={{ $json.ComplianceRequirements }}',
+        PricingMatrix: '={{ $json.PricingMatrix }}', ScopeOfWork: '={{ $json.ScopeOfWork }}',
+        KPIs_SLAs: '={{ $json.KPIs_SLAs }}',
+        SubmissionRequirements: '={{ $json.SubmissionRequirements }}',
+        EvaluationCriteria: '={{ $json.EvaluationCriteria }}',
+        RedFlags: '={{ $json.RedFlags }}', BidStrategy: '={{ $json.BidStrategy }}',
+        DocumentsRead: '={{ $json.DocumentsRead }}', Link: '={{ $json.Link }}',
+      },
+      matchingColumns: [], schema: [],
+    },
+    options: {},
+  },
+  id: 'c-deepsheet', name: 'Append to Deep Analysis Tab',
+  type: 'n8n-nodes-base.googleSheets', typeVersion: 4.5, position: at(1),
+  credentials: cred('googleSheetsOAuth2Api', 'Google Sheets account'),
+});
+
+nodes.push({
+  parameters: {
+    operation: 'update',
+    documentId: { __rl: true, value: SHEET_ID, mode: 'id' },
+    sheetName: { __rl: true, value: TAB, mode: 'name' },
+    columns: {
+      mappingMode: 'defineBelow',
+      value: { RowID: '={{ $json.RowID }}', HumanApproval: 'Analyzed' },
+      matchingColumns: ['RowID'], schema: [],
+    },
+    options: {},
+  },
+  id: 'c-mark', name: 'Mark Row Analyzed',
+  type: 'n8n-nodes-base.googleSheets', typeVersion: 4.5, position: at(1),
+  credentials: cred('googleSheetsOAuth2Api', 'Google Sheets account'),
+});
+
+nodes.push({
+  parameters: {
+    select: 'channel',
+    channelId: { __rl: true, value: '#tenders', mode: 'name' },
+    text: '=✅ *Deep analysis complete: {{ $json.Title }}*\n\nDocuments read: {{ $json.DocumentsRead }}\n\nCompliance, pricing structure, scope and bid strategy are in the Deep Analysis tab.',
+    otherOptions: {},
+  },
+  id: 'c-analysisdone', name: 'Slack - Analysis Ready',
+  type: 'n8n-nodes-base.slack', typeVersion: 2.2, position: at(1),
+  credentials: cred('slackApi', 'Slack account'), onError: 'continueRegularOutput',
+});
+
 // ───────────────────────────────────────────────────────── wiring
 link('On Approval (Webhook)', 'Validate Payload');
 link('Validate Payload', 'Build Browser Script');
@@ -564,13 +786,23 @@ link('Read Package URL', 'Fetch Package');
 link('Fetch Package', 'Name the File');
 link('Name the File', 'Got the Pack?');
 link('Got the Pack?', 'Upload to Drive', 0);
+link('Got the Pack?', 'Unzip Tender Pack', 0);
+link('Unzip Tender Pack', 'Select Documents');
+link('Select Documents', 'Extract PDF Text');
+link('Extract PDF Text', 'Combine Document Text');
+link('Combine Document Text', 'Deep Analysis');
+linkAi('OpenAI Chat Model', 'Deep Analysis');
+link('Deep Analysis', 'Parse Deep Analysis');
+link('Parse Deep Analysis', 'Append to Deep Analysis Tab');
+link('Append to Deep Analysis Tab', 'Mark Row Analyzed');
+link('Mark Row Analyzed', 'Slack - Analysis Ready');
 link('Got the Pack?', 'Slack - Manual Download Needed', 1);
 link('Upload to Drive', 'Build Drive Link');
 link('Build Drive Link', 'Write DocumentLink');
 link('Write DocumentLink', 'Slack - Pack Ready');
 
 const wf = {
-  name: 'Workflow 4 — VendorPanel Download via Browserless',
+  name: 'Workflow 4 — VendorPanel Download + Deep Analysis',
   nodes, connections: conn,
   settings: { executionOrder: 'v1' },
   pinData: {},

@@ -1,5 +1,5 @@
 {
-  "name": "Workflow 4 \u2014 VendorPanel Download via Browserless",
+  "name": "Workflow 4 — VendorPanel Download + Deep Analysis",
   "nodes": [
     {
       "parameters": {
@@ -34,7 +34,7 @@
     },
     {
       "parameters": {
-        "jsCode": "// Bake the tender reference into the browser script. Credentials are NOT put\n// here \u2014 they arrive in Browserless's `context`, injected by the credential.\nconst SCRIPT = \"\\nexport default async function ({ page, context }) {\\n  const { UserName, Password } = context || {};\\n  if (!UserName || !Password) throw new Error('No credentials in context \u2014 check the Browserless credential');\\n\\n  const VP_REF = '__VP_REF__';\\n  const TITLE  = '__TITLE__';\\n  const log = [];\\n  const note = (m) => { log.push(m); console.log(m); };\\n\\n  page.setDefaultTimeout(45000);\\n  await page.setViewport({ width: 1400, height: 900 });\\n\\n  // ---- log in (2 steps: email -> Next -> password -> Next) ----------------\\n  await page.goto('https://www.vendorpanel.com.au/', { waitUntil: 'domcontentloaded' });\\n  await page.waitForSelector('#UserName', { visible: true });\\n  await page.type('#UserName', UserName, { delay: 20 });\\n  note('email entered');\\n\\n  await Promise.all([\\n    page.waitForNavigation({ waitUntil: 'domcontentloaded' }).catch(() => null),\\n    page.click('#btnGo'),\\n  ]);\\n\\n  await page.waitForSelector('#Password', { visible: true });\\n  await page.type('#Password', Password, { delay: 20 });\\n  note('password entered');\\n\\n  await Promise.all([\\n    page.waitForNavigation({ waitUntil: 'networkidle2' }).catch(() => null),\\n    page.click('#btnGo'),\\n  ]);\\n\\n  if (/account\\\\/login/i.test(page.url())) {\\n    throw new Error('login did not complete \u2014 still at ' + page.url());\\n  }\\n  note('logged in');\\n\\n  // ---- members' tender list ----------------------------------------------\\n  await page.goto('https://www.vendorpanel.com.au/Members/?do=Tenders:AllTenders',\\n    { waitUntil: 'networkidle2' });\\n  note('tender list loaded');\\n\\n  // The list is paginated (50 per page, ~8 pages). A followed tender is pinned\\n  // to the top of page 1, but an unfollowed one can be on any page \u2014 and we\\n  // have to follow it before the download icon becomes active. So: widen the\\n  // page size, then walk the pages until the tender turns up.\\n  //\\n  // The search box is deliberately unused: it matches on title text, so typing\\n  // a VP reference into it empties the list.\\n  await page.waitForNetworkIdle({ idleTime: 1500, timeout: 30000 }).catch(() => null);\\n\\n  // Show as many per page as the dropdown allows.\\n  const grew = await page.evaluate(() => {\\n    const sel = [...document.querySelectorAll('select')]\\n      .find((s) => [...s.options].every((o) => /^\\\\d+$/.test(o.value)) && s.options.length > 1);\\n    if (!sel) return 0;\\n    const biggest = [...sel.options].map((o) => Number(o.value)).sort((x, y) => y - x)[0];\\n    sel.value = String(biggest);\\n    sel.dispatchEvent(new Event('change', { bubbles: true }));\\n    return biggest;\\n  });\\n  if (grew) {\\n    await page.waitForNetworkIdle({ idleTime: 1500, timeout: 30000 }).catch(() => null);\\n    note('page size set to ' + grew);\\n  }\\n\\n  const findAndClick = (ref, title) => {\\n    const isIcon = (e) => {\\n      const s = (e.getAttribute('title') || '') + ' ' + (e.getAttribute('alt') || '') +\\n                ' ' + (e.getAttribute('aria-label') || '') + ' ' + (e.className || '') +\\n                ' ' + (e.getAttribute('src') || '') + ' ' + (e.getAttribute('href') || '') +\\n                ' ' + (e.getAttribute('onclick') || '');\\n      return /download|package/i.test(s);\\n    };\\n\\n    const bodyText = document.body.innerText || '';\\n    const needles = ['VP' + ref, title.slice(0, 40)].filter(Boolean);\\n    const present = needles.filter((n) => bodyText.includes(n));\\n\\n    // deepest element naming this tender\\n    let anchor = null;\\n    const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_ELEMENT);\\n    while (walker.nextNode()) {\\n      const el = walker.currentNode;\\n      if (el.children.length) continue;\\n      const t = (el.textContent || '').trim();\\n      if (!t) continue;\\n      if (t.includes('VP' + ref) || (title && t.includes(title.slice(0, 40)))) { anchor = el; break; }\\n    }\\n    if (!anchor) return { found: false, onThisPage: false, needlesPresent: present,\\n                          listLength: bodyText.length };\\n\\n    // walk up to the ancestor that also holds a download control\\n    let row = anchor, icon = null;\\n    for (let up = 0; up < 12 && row; up++) {\\n      icon = [...row.querySelectorAll('a, img, i, span, button, input')].find(isIcon);\\n      if (icon) break;\\n      row = row.parentElement;\\n    }\\n    if (!icon || !row) {\\n      return { found: false, onThisPage: true, reason: 'found the tender but no download control near it',\\n               needlesPresent: present,\\n               sample: (anchor.closest('tr') || anchor.parentElement || anchor).innerHTML.slice(0, 1200) };\\n    }\\n\\n    // must be Followed before the icon works\\n    const follow = [...row.querySelectorAll('a, span, div, label, input')]\\n      .find((e) => /^\\\\s*follow\\\\s*$/i.test((e.innerText || e.value || '').trim()));\\n    if (follow) follow.click();\\n\\n    return { found: true, onThisPage: true, followed: Boolean(follow),\\n             iconHtml: icon.outerHTML.slice(0, 200) };\\n  };\\n\\n  const gotoNextPage = () => {\\n    const nav = [...document.querySelectorAll('a, input, button, span')].find((e) => {\\n      const s = (e.getAttribute('title') || '') + ' ' + (e.getAttribute('aria-label') || '') +\\n                ' ' + (e.className || '') + ' ' + (e.id || '') + ' ' + (e.getAttribute('onclick') || '');\\n      const disabled = e.disabled || /disabled/i.test(e.className || '');\\n      return /next/i.test(s) && !/nextpageset|disabled/i.test(e.className || '') && !disabled;\\n    });\\n    if (!nav) return false;\\n    nav.click();\\n    return true;\\n  };\\n\\n  let clicked = { found: false };\\n  for (let pageNo = 1; pageNo <= 12; pageNo++) {\\n    clicked = await page.evaluate(findAndClick, VP_REF, TITLE);\\n    if (clicked.found || clicked.onThisPage) { note('found on page ' + pageNo); break; }\\n\\n    const moved = await page.evaluate(gotoNextPage);\\n    if (!moved) { note('no further pages after ' + pageNo); break; }\\n    await page.waitForNetworkIdle({ idleTime: 1500, timeout: 30000 }).catch(() => null);\\n  }\\n\\n  // Following changes the row, so re-locate and click the icon for real.\\n  if (clicked.found && clicked.followed) {\\n    await new Promise((r) => setTimeout(r, 3000));\\n    clicked = await page.evaluate(findAndClick, VP_REF, TITLE);\\n  }\\n\\n  if (clicked.found) {\\n    await page.evaluate((ref, title) => {\\n      const isIcon = (e) => {\\n        const s = (e.getAttribute('title') || '') + ' ' + (e.getAttribute('alt') || '') +\\n                  ' ' + (e.getAttribute('aria-label') || '') + ' ' + (e.className || '') +\\n                  ' ' + (e.getAttribute('src') || '') + ' ' + (e.getAttribute('href') || '') +\\n                  ' ' + (e.getAttribute('onclick') || '');\\n        return /download|package/i.test(s);\\n      };\\n      let anchor = null;\\n      const w = document.createTreeWalker(document.body, NodeFilter.SHOW_ELEMENT);\\n      while (w.nextNode()) {\\n        const el = w.currentNode;\\n        if (el.children.length) continue;\\n        const t = (el.textContent || '').trim();\\n        if (t.includes('VP' + ref) || (title && t.includes(title.slice(0, 40)))) { anchor = el; break; }\\n      }\\n      let row = anchor;\\n      for (let up = 0; up < 12 && row; up++) {\\n        const icon = [...row.querySelectorAll('a, img, i, span, button, input')].find(isIcon);\\n        if (icon) { icon.click(); return true; }\\n        row = row.parentElement;\\n      }\\n      return false;\\n    }, VP_REF, TITLE);\\n  }\\n\\n  if (!clicked.found) {\\n    throw new Error('Could not start the download: ' + (clicked.reason || 'tender not found on any page') +\\n      ' || needlesPresent=' + JSON.stringify(clicked.needlesPresent || []) +\\n      ' || listLength=' + (clicked.listLength ?? '?') +\\n      (clicked.sample ? ' || ROW=' + clicked.sample : ''));\\n  }\\n  note('clicked the download icon ' + (clicked.iconHtml || '') +\\n       (clicked.followed ? ' (followed first)' : ''));\\n\\n  // ---- the modal, which may be inline or in an iframe ---------------------\\n  const pressDownload = async () => {\\n    const targets = [page, ...page.frames()];\\n    for (const t of targets) {\\n      const hit = await t.evaluate(() => {\\n        const b = [...document.querySelectorAll('a, button, input[type=submit]')]\\n          .find((e) => /^\\\\s*download\\\\s*$/i.test(e.innerText || e.value || ''));\\n        if (!b) return false;\\n        b.click();\\n        return true;\\n      }).catch(() => false);\\n      if (hit) return true;\\n    }\\n    return false;\\n  };\\n\\n  // Register the listener BEFORE clicking, so we catch the request the moment\\n  // it is made rather than when it completes. VendorPanel spends ~21s building\\n  // the zip server-side, and the free Browserless plan caps a session at 60s \u2014\\n  // so we grab the URL and let n8n fetch the bytes outside the browser.\\n  let downloadUrl = null;\\n  const urlSeen = new Promise((resolve) => {\\n    const onReq = (req) => {\\n      const u = req.url();\\n      if (/FileDownloader|\\\\.zip(\\\\?|$)|blob\\\\.core\\\\.windows\\\\.net/i.test(u)) {\\n        try { page.off('request', onReq); } catch (e) {}\\n        resolve(u);\\n      }\\n    };\\n    page.on('request', onReq);\\n    setTimeout(() => resolve(null), 30000);\\n  });\\n\\n  let pressed = false;\\n  for (let i = 0; i < 30 && !pressed; i++) {\\n    pressed = await pressDownload();\\n    if (!pressed) await new Promise((r) => setTimeout(r, 500));\\n  }\\n  if (!pressed) throw new Error('The download modal never showed a Download button');\\n  note('pressed Download');\\n\\n  downloadUrl = await urlSeen;\\n  if (!downloadUrl) throw new Error('Download was pressed but no package URL was requested');\\n  note('package url captured');\\n\\n  // Hand the session over too, in case the URL is not self-authenticating.\\n  const cookies = await page.cookies();\\n  const cookieHeader = cookies.map((c) => c.name + '=' + c.value).join('; ');\\n\\n  return {\\n    data: { downloadUrl, cookieHeader, log },\\n    type: 'application/json',\\n  };\\n}\\n\";\n\nconst out = [];\nfor (const item of $input.all()) {\n  const j = item.json;\n  const code = SCRIPT\n    .replace('__VP_REF__', String(j.vpRef).replace(/[^0-9]/g, ''))\n    .replace('__TITLE__', String(j.title).replace(/['\"\\\\]/g, ' ').slice(0, 80));\n  out.push({ json: { ...j, code } });\n}\nreturn out;"
+        "jsCode": "// Bake the tender reference into the browser script. Credentials are NOT put\n// here — they arrive in Browserless's `context`, injected by the credential.\nconst SCRIPT = \"\\nexport default async function ({ page, context }) {\\n  const { UserName, Password } = context || {};\\n  if (!UserName || !Password) throw new Error('No credentials in context — check the Browserless credential');\\n\\n  const VP_REF = '__VP_REF__';\\n  const TITLE  = '__TITLE__';\\n  const log = [];\\n  const note = (m) => { log.push(m); console.log(m); };\\n\\n  page.setDefaultTimeout(45000);\\n  await page.setViewport({ width: 1400, height: 900 });\\n\\n  // ---- log in (2 steps: email -> Next -> password -> Next) ----------------\\n  await page.goto('https://www.vendorpanel.com.au/', { waitUntil: 'domcontentloaded' });\\n  await page.waitForSelector('#UserName', { visible: true });\\n  await page.type('#UserName', UserName, { delay: 20 });\\n  note('email entered');\\n\\n  await Promise.all([\\n    page.waitForNavigation({ waitUntil: 'domcontentloaded' }).catch(() => null),\\n    page.click('#btnGo'),\\n  ]);\\n\\n  await page.waitForSelector('#Password', { visible: true });\\n  await page.type('#Password', Password, { delay: 20 });\\n  note('password entered');\\n\\n  await Promise.all([\\n    page.waitForNavigation({ waitUntil: 'networkidle2' }).catch(() => null),\\n    page.click('#btnGo'),\\n  ]);\\n\\n  if (/account\\\\/login/i.test(page.url())) {\\n    throw new Error('login did not complete — still at ' + page.url());\\n  }\\n  note('logged in');\\n\\n  // ---- members' tender list ----------------------------------------------\\n  await page.goto('https://www.vendorpanel.com.au/Members/?do=Tenders:AllTenders',\\n    { waitUntil: 'networkidle2' });\\n  note('tender list loaded');\\n\\n  // The list is paginated (50 per page, ~8 pages). A followed tender is pinned\\n  // to the top of page 1, but an unfollowed one can be on any page — and we\\n  // have to follow it before the download icon becomes active. So: widen the\\n  // page size, then walk the pages until the tender turns up.\\n  //\\n  // The search box is deliberately unused: it matches on title text, so typing\\n  // a VP reference into it empties the list.\\n  await page.waitForNetworkIdle({ idleTime: 1500, timeout: 30000 }).catch(() => null);\\n\\n  // Show as many per page as the dropdown allows.\\n  const grew = await page.evaluate(() => {\\n    const sel = [...document.querySelectorAll('select')]\\n      .find((s) => [...s.options].every((o) => /^\\\\d+$/.test(o.value)) && s.options.length > 1);\\n    if (!sel) return 0;\\n    const biggest = [...sel.options].map((o) => Number(o.value)).sort((x, y) => y - x)[0];\\n    sel.value = String(biggest);\\n    sel.dispatchEvent(new Event('change', { bubbles: true }));\\n    return biggest;\\n  });\\n  if (grew) {\\n    await page.waitForNetworkIdle({ idleTime: 1500, timeout: 30000 }).catch(() => null);\\n    note('page size set to ' + grew);\\n  }\\n\\n  const findAndClick = (ref, title) => {\\n    const isIcon = (e) => {\\n      const s = (e.getAttribute('title') || '') + ' ' + (e.getAttribute('alt') || '') +\\n                ' ' + (e.getAttribute('aria-label') || '') + ' ' + (e.className || '') +\\n                ' ' + (e.getAttribute('src') || '') + ' ' + (e.getAttribute('href') || '') +\\n                ' ' + (e.getAttribute('onclick') || '');\\n      return /download|package/i.test(s);\\n    };\\n\\n    const bodyText = document.body.innerText || '';\\n    const needles = ['VP' + ref, title.slice(0, 40)].filter(Boolean);\\n    const present = needles.filter((n) => bodyText.includes(n));\\n\\n    // deepest element naming this tender\\n    let anchor = null;\\n    const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_ELEMENT);\\n    while (walker.nextNode()) {\\n      const el = walker.currentNode;\\n      if (el.children.length) continue;\\n      const t = (el.textContent || '').trim();\\n      if (!t) continue;\\n      if (t.includes('VP' + ref) || (title && t.includes(title.slice(0, 40)))) { anchor = el; break; }\\n    }\\n    if (!anchor) return { found: false, onThisPage: false, needlesPresent: present,\\n                          listLength: bodyText.length };\\n\\n    // walk up to the ancestor that also holds a download control\\n    let row = anchor, icon = null;\\n    for (let up = 0; up < 12 && row; up++) {\\n      icon = [...row.querySelectorAll('a, img, i, span, button, input')].find(isIcon);\\n      if (icon) break;\\n      row = row.parentElement;\\n    }\\n    if (!icon || !row) {\\n      return { found: false, onThisPage: true, reason: 'found the tender but no download control near it',\\n               needlesPresent: present,\\n               sample: (anchor.closest('tr') || anchor.parentElement || anchor).innerHTML.slice(0, 1200) };\\n    }\\n\\n    // must be Followed before the icon works\\n    const follow = [...row.querySelectorAll('a, span, div, label, input')]\\n      .find((e) => /^\\\\s*follow\\\\s*$/i.test((e.innerText || e.value || '').trim()));\\n    if (follow) follow.click();\\n\\n    return { found: true, onThisPage: true, followed: Boolean(follow),\\n             iconHtml: icon.outerHTML.slice(0, 200) };\\n  };\\n\\n  const gotoNextPage = () => {\\n    const nav = [...document.querySelectorAll('a, input, button, span')].find((e) => {\\n      const s = (e.getAttribute('title') || '') + ' ' + (e.getAttribute('aria-label') || '') +\\n                ' ' + (e.className || '') + ' ' + (e.id || '') + ' ' + (e.getAttribute('onclick') || '');\\n      const disabled = e.disabled || /disabled/i.test(e.className || '');\\n      return /next/i.test(s) && !/nextpageset|disabled/i.test(e.className || '') && !disabled;\\n    });\\n    if (!nav) return false;\\n    nav.click();\\n    return true;\\n  };\\n\\n  let clicked = { found: false };\\n  for (let pageNo = 1; pageNo <= 12; pageNo++) {\\n    clicked = await page.evaluate(findAndClick, VP_REF, TITLE);\\n    if (clicked.found || clicked.onThisPage) { note('found on page ' + pageNo); break; }\\n\\n    const moved = await page.evaluate(gotoNextPage);\\n    if (!moved) { note('no further pages after ' + pageNo); break; }\\n    await page.waitForNetworkIdle({ idleTime: 1500, timeout: 30000 }).catch(() => null);\\n  }\\n\\n  // Following changes the row, so re-locate and click the icon for real.\\n  if (clicked.found && clicked.followed) {\\n    await new Promise((r) => setTimeout(r, 3000));\\n    clicked = await page.evaluate(findAndClick, VP_REF, TITLE);\\n  }\\n\\n  if (clicked.found) {\\n    await page.evaluate((ref, title) => {\\n      const isIcon = (e) => {\\n        const s = (e.getAttribute('title') || '') + ' ' + (e.getAttribute('alt') || '') +\\n                  ' ' + (e.getAttribute('aria-label') || '') + ' ' + (e.className || '') +\\n                  ' ' + (e.getAttribute('src') || '') + ' ' + (e.getAttribute('href') || '') +\\n                  ' ' + (e.getAttribute('onclick') || '');\\n        return /download|package/i.test(s);\\n      };\\n      let anchor = null;\\n      const w = document.createTreeWalker(document.body, NodeFilter.SHOW_ELEMENT);\\n      while (w.nextNode()) {\\n        const el = w.currentNode;\\n        if (el.children.length) continue;\\n        const t = (el.textContent || '').trim();\\n        if (t.includes('VP' + ref) || (title && t.includes(title.slice(0, 40)))) { anchor = el; break; }\\n      }\\n      let row = anchor;\\n      for (let up = 0; up < 12 && row; up++) {\\n        const icon = [...row.querySelectorAll('a, img, i, span, button, input')].find(isIcon);\\n        if (icon) { icon.click(); return true; }\\n        row = row.parentElement;\\n      }\\n      return false;\\n    }, VP_REF, TITLE);\\n  }\\n\\n  if (!clicked.found) {\\n    throw new Error('Could not start the download: ' + (clicked.reason || 'tender not found on any page') +\\n      ' || needlesPresent=' + JSON.stringify(clicked.needlesPresent || []) +\\n      ' || listLength=' + (clicked.listLength ?? '?') +\\n      (clicked.sample ? ' || ROW=' + clicked.sample : ''));\\n  }\\n  note('clicked the download icon ' + (clicked.iconHtml || '') +\\n       (clicked.followed ? ' (followed first)' : ''));\\n\\n  // ---- the modal, which may be inline or in an iframe ---------------------\\n  const pressDownload = async () => {\\n    const targets = [page, ...page.frames()];\\n    for (const t of targets) {\\n      const hit = await t.evaluate(() => {\\n        const b = [...document.querySelectorAll('a, button, input[type=submit]')]\\n          .find((e) => /^\\\\s*download\\\\s*$/i.test(e.innerText || e.value || ''));\\n        if (!b) return false;\\n        b.click();\\n        return true;\\n      }).catch(() => false);\\n      if (hit) return true;\\n    }\\n    return false;\\n  };\\n\\n  // Register the listener BEFORE clicking, so we catch the request the moment\\n  // it is made rather than when it completes. VendorPanel spends ~21s building\\n  // the zip server-side, and the free Browserless plan caps a session at 60s —\\n  // so we grab the URL and let n8n fetch the bytes outside the browser.\\n  let downloadUrl = null;\\n  const urlSeen = new Promise((resolve) => {\\n    const onReq = (req) => {\\n      const u = req.url();\\n      if (/FileDownloader|\\\\.zip(\\\\?|$)|blob\\\\.core\\\\.windows\\\\.net/i.test(u)) {\\n        try { page.off('request', onReq); } catch (e) {}\\n        resolve(u);\\n      }\\n    };\\n    page.on('request', onReq);\\n    setTimeout(() => resolve(null), 30000);\\n  });\\n\\n  let pressed = false;\\n  for (let i = 0; i < 30 && !pressed; i++) {\\n    pressed = await pressDownload();\\n    if (!pressed) await new Promise((r) => setTimeout(r, 500));\\n  }\\n  if (!pressed) throw new Error('The download modal never showed a Download button');\\n  note('pressed Download');\\n\\n  downloadUrl = await urlSeen;\\n  if (!downloadUrl) throw new Error('Download was pressed but no package URL was requested');\\n  note('package url captured');\\n\\n  // Hand the session over too, in case the URL is not self-authenticating.\\n  const cookies = await page.cookies();\\n  const cookieHeader = cookies.map((c) => c.name + '=' + c.value).join('; ');\\n\\n  return {\\n    data: { downloadUrl, cookieHeader, log },\\n    type: 'application/json',\\n  };\\n}\\n\";\n\nconst out = [];\nfor (const item of $input.all()) {\n  const j = item.json;\n  const code = SCRIPT\n    .replace('__VP_REF__', String(j.vpRef).replace(/[^0-9]/g, ''))\n    .replace('__TITLE__', String(j.title).replace(/['\"\\\\]/g, ' ').slice(0, 80));\n  out.push({ json: { ...j, code } });\n}\nreturn out;"
       },
       "id": "c-script",
       "name": "Build Browser Script",
@@ -220,7 +220,7 @@
           "__rl": true,
           "value": "root",
           "mode": "list",
-          "cachedResultName": "/ \u2190 CHANGE ME to Tender Packs"
+          "cachedResultName": "/ ← CHANGE ME to Tender Packs"
         },
         "options": {}
       },
@@ -300,7 +300,7 @@
           "value": "#tenders",
           "mode": "name"
         },
-        "text": "=\ud83d\udce6 *Tender pack retrieved*\n\n*{{ $json.title }}*\n{{ $json.DocumentLink }}\n\n_Deep analysis runs within 5 minutes._",
+        "text": "=📦 *Tender pack retrieved*\n\n*{{ $json.title }}*\n{{ $json.DocumentLink }}\n\n_Deep analysis runs within 5 minutes._",
         "otherOptions": {}
       },
       "id": "c-ok",
@@ -327,7 +327,7 @@
           "value": "#tenders",
           "mode": "name"
         },
-        "text": "=\u26a0\ufe0f *Could not auto-download this pack*\n\n*{{ $json.title }}*\n{{ $json.link }}\n\n{{ $json.reason }}\n{{ $json.detail }}\n\n_Fetch it by hand and paste the Drive link into DocumentLink._",
+        "text": "=⚠️ *Could not auto-download this pack*\n\n*{{ $json.title }}*\n{{ $json.link }}\n\n{{ $json.reason }}\n{{ $json.detail }}\n\n_Fetch it by hand and paste the Drive link into DocumentLink._",
         "otherOptions": {}
       },
       "id": "c-fail",
@@ -347,30 +347,231 @@
       "onError": "continueRegularOutput"
     },
     {
+      "parameters": {},
+      "id": "c-unzip",
+      "name": "Unzip Tender Pack",
+      "type": "n8n-nodes-base.compression",
+      "typeVersion": 1.1,
+      "position": [
+        3510,
+        500
+      ],
+      "onError": "continueRegularOutput"
+    },
+    {
       "parameters": {
-        "workflowId": {
+        "jsCode": "// Pick the documents worth reading, wherever they sit in the archive.\n//\n// A real pack looks like:\n//   VP517599/Request Summary Report.pdf\n//   VP517599/RequestDocs/Attachment_B-Specifications_and_Requirements.pdf\n//   VP517599/RequestDocs/QPS23388_ITO_Part_A.pdf   ... 8 files, nested\n//\n// So never address files positionally (file_1, file_2...) — the order and depth\n// vary by buyer. Score them by filename and take the most informative few.\nconst out = [];\nconst job = $('Name the File').first().json;\n\nconst score = (name) => {\n  const n = name.toLowerCase();\n  if (/spec|requirement|scope|statement of work|sow/.test(n)) return 100;\n  if (/ito|invitation|rft|rfq|tender|part[_ -]?a/.test(n))    return 90;\n  if (/condition|terms|contract|deed/.test(n))                return 60;\n  if (/summary/.test(n))                                      return 55;\n  if (/pricing|schedule|rates/.test(n))                        return 50;\n  if (/confidential|privacy|conflict/.test(n))                 return 10;\n  return 30;\n};\n\nfor (const item of $input.all()) {\n  const bins = item.binary || {};\n  const files = Object.entries(bins).map(([key, b]) => ({\n    key,\n    name: b.fileName || key,\n    mime: b.mimeType || '',\n  }));\n\n  // PDFs carry the substance; spreadsheets are pricing templates with little prose\n  const pdfs = files\n    .filter((f) => /pdf/i.test(f.mime) || /\\.pdf$/i.test(f.name))\n    .sort((a, b) => score(b.name) - score(a.name))\n    .slice(0, 5);\n\n  if (!pdfs.length) {\n    out.push({ json: { ...job, ok: false,\n      reason: 'no PDFs found in the pack',\n      filesSeen: files.map((f) => f.name).slice(0, 20) } });\n    continue;\n  }\n\n  // one item per document, each with its binary under \"data\" so a single\n  // Extract From File node can process them all\n  pdfs.forEach((f, i) => {\n    out.push({\n      json: { ...job, ok: true, docName: f.name, docIndex: i, docCount: pdfs.length,\n              allFiles: files.map((x) => x.name) },\n      binary: { data: bins[f.key] },\n    });\n  });\n}\nreturn out;"
+      },
+      "id": "c-pick",
+      "name": "Select Documents",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3760,
+        500
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "pdf",
+        "binaryPropertyName": "data",
+        "options": {}
+      },
+      "id": "c-pdf",
+      "name": "Extract PDF Text",
+      "type": "n8n-nodes-base.extractFromFile",
+      "typeVersion": 1,
+      "position": [
+        4010,
+        500
+      ],
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Stitch the documents together for the model, biggest-signal first.\nconst job = $('Name the File').first().json;\nconst picked = $('Select Documents').all();\n\nlet combined = '';\nconst used = [];\n$input.all().forEach((item, i) => {\n  const name = picked[i]?.json?.docName || ('document ' + (i + 1));\n  const text = (item.json.text || '').toString();\n  if (!text.trim()) return;\n  used.push(name);\n  combined += '\\n\\n===== ' + name + ' =====\\n' + text;\n});\n\nif (!combined.trim()) {\n  return [{ json: { ...job, ok: false, reason: 'no text could be extracted from the PDFs' } }];\n}\n\nreturn [{ json: {\n  ...job,\n  ok: true,\n  documentsUsed: used,\n  allFiles: picked[0]?.json?.allFiles || [],\n  doc_text: combined.replace(/[\\t ]+/g, ' ').slice(0, 250000),\n} }];"
+      },
+      "id": "c-combine",
+      "name": "Combine Document Text",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        4260,
+        500
+      ]
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=You are a tender analyst for a South East Queensland SECURITY (manpower guarding + electronic/CCTV) and COMMERCIAL CLEANING contractor. Read the full tender document below and extract the exact, contract-critical requirements. Where a value is not stated, use \"Not stated\" — never invent.\n\nReturn ONLY a valid JSON object (no markdown, no code fences, no prose):\n{\n  \"compliance_requirements\": \"every licence, certification, clearance, insurance level and registration required\",\n  \"pricing_matrix\": \"the pricing/schedule-of-rates structure — line items, units, GST, escalation clauses\",\n  \"scope_of_work\": \"4-6 sentence precise description of work, sites, hours/roster and deliverables\",\n  \"kpis_slas\": \"performance indicators, response times, reporting obligations\",\n  \"submission_requirements\": \"forms, referees, page limits, lodgement method\",\n  \"evaluation_criteria\": \"assessment criteria and weightings if given\",\n  \"red_flags\": \"incumbent advantage, prequalification, unusual indemnities, tight timeframe\",\n  \"bid_strategy\": \"3-5 sentences of practical advice on positioning a competitive bid\"\n}\n\nTender: {{ $json.title }}\nDocuments read: {{ $json.documentsUsed }}\n\nTENDER DOCUMENT:\n{{ $json.doc_text }}",
+        "hasOutputParser": false
+      },
+      "id": "c-llm",
+      "name": "Deep Analysis",
+      "type": "@n8n/n8n-nodes-langchain.chainLlm",
+      "typeVersion": 1.4,
+      "position": [
+        4510,
+        500
+      ]
+    },
+    {
+      "parameters": {
+        "model": {
           "__rl": true,
-          "value": "REPLACE_WITH_WORKFLOW_2_ID",
+          "value": "gpt-4.1-mini",
+          "mode": "list",
+          "cachedResultName": "gpt-4.1-mini"
+        },
+        "options": {
+          "temperature": 0.3
+        }
+      },
+      "id": "c-model",
+      "name": "OpenAI Chat Model",
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.2,
+      "position": [
+        3010,
+        700
+      ],
+      "credentials": {
+        "openAiApi": {
+          "id": "REPLACE_ME",
+          "name": "n8n free OpenAI API credits"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "let raw = ($json.text || '').toString().replace(/```json/gi, '').replace(/```/g, '').trim();\nlet a;\ntry { a = JSON.parse(raw); } catch (e) { a = { parse_error: true, scope_of_work: raw.slice(0, 500) }; }\n\nconst meta = $('Combine Document Text').first().json;\nconst cap = new Date().toLocaleString('en-AU', { timeZone: 'Australia/Brisbane' });\n\nreturn { json: {\n  RowID: meta.rowId || '',\n  Title: meta.title || '',\n  Analyzed: cap,\n  ComplianceRequirements: a.compliance_requirements || '',\n  PricingMatrix: a.pricing_matrix || '',\n  ScopeOfWork: a.scope_of_work || '',\n  KPIs_SLAs: a.kpis_slas || '',\n  SubmissionRequirements: a.submission_requirements || '',\n  EvaluationCriteria: a.evaluation_criteria || '',\n  RedFlags: a.red_flags || '',\n  BidStrategy: a.bid_strategy || '',\n  DocumentsRead: (meta.documentsUsed || []).join(' | '),\n  Link: meta.link || '',\n} };"
+      },
+      "id": "c-parse",
+      "name": "Parse Deep Analysis",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        4760,
+        500
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "1YrekkkB-YjNAhWA1A-VYMxCcEl8A-UB5d627_zx7fEY",
           "mode": "id"
         },
-        "workflowInputs": {
+        "sheetName": {
+          "__rl": true,
+          "value": "Deep Analysis",
+          "mode": "name"
+        },
+        "columns": {
           "mappingMode": "defineBelow",
-          "value": {},
+          "value": {
+            "RowID": "={{ $json.RowID }}",
+            "Title": "={{ $json.Title }}",
+            "Analyzed": "={{ $json.Analyzed }}",
+            "ComplianceRequirements": "={{ $json.ComplianceRequirements }}",
+            "PricingMatrix": "={{ $json.PricingMatrix }}",
+            "ScopeOfWork": "={{ $json.ScopeOfWork }}",
+            "KPIs_SLAs": "={{ $json.KPIs_SLAs }}",
+            "SubmissionRequirements": "={{ $json.SubmissionRequirements }}",
+            "EvaluationCriteria": "={{ $json.EvaluationCriteria }}",
+            "RedFlags": "={{ $json.RedFlags }}",
+            "BidStrategy": "={{ $json.BidStrategy }}",
+            "DocumentsRead": "={{ $json.DocumentsRead }}",
+            "Link": "={{ $json.Link }}"
+          },
           "matchingColumns": [],
           "schema": []
         },
-        "options": {
-          "waitForSubWorkflow": false
+        "options": {}
+      },
+      "id": "c-deepsheet",
+      "name": "Append to Deep Analysis Tab",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        5010,
+        500
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "REPLACE_ME",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "documentId": {
+          "__rl": true,
+          "value": "1YrekkkB-YjNAhWA1A-VYMxCcEl8A-UB5d627_zx7fEY",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Claude v3",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "RowID": "={{ $json.RowID }}",
+            "HumanApproval": "Analyzed"
+          },
+          "matchingColumns": [
+            "RowID"
+          ],
+          "schema": []
+        },
+        "options": {}
+      },
+      "id": "c-mark",
+      "name": "Mark Row Analyzed",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        5260,
+        500
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "REPLACE_ME",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "select": "channel",
+        "channelId": {
+          "__rl": true,
+          "value": "#tenders",
+          "mode": "name"
+        },
+        "text": "=✅ *Deep analysis complete: {{ $json.Title }}*\n\nDocuments read: {{ $json.DocumentsRead }}\n\nCompliance, pricing structure, scope and bid strategy are in the Deep Analysis tab.",
+        "otherOptions": {}
+      },
+      "id": "c-analysisdone",
+      "name": "Slack - Analysis Ready",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.2,
+      "position": [
+        5510,
+        500
+      ],
+      "credentials": {
+        "slackApi": {
+          "id": "REPLACE_ME",
+          "name": "Slack account"
         }
       },
-      "id": "c-deep",
-      "name": "Run Deep Analysis",
-      "type": "n8n-nodes-base.executeWorkflow",
-      "typeVersion": 1.2,
-      "position": [
-        3260,
-        300
-      ],
       "onError": "continueRegularOutput"
     }
   ],
@@ -477,11 +678,115 @@
             "node": "Upload to Drive",
             "type": "main",
             "index": 0
+          },
+          {
+            "node": "Unzip Tender Pack",
+            "type": "main",
+            "index": 0
           }
         ],
         [
           {
             "node": "Slack - Manual Download Needed",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Unzip Tender Pack": {
+      "main": [
+        [
+          {
+            "node": "Select Documents",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Select Documents": {
+      "main": [
+        [
+          {
+            "node": "Extract PDF Text",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract PDF Text": {
+      "main": [
+        [
+          {
+            "node": "Combine Document Text",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Combine Document Text": {
+      "main": [
+        [
+          {
+            "node": "Deep Analysis",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenAI Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Deep Analysis",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Deep Analysis": {
+      "main": [
+        [
+          {
+            "node": "Parse Deep Analysis",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Deep Analysis": {
+      "main": [
+        [
+          {
+            "node": "Append to Deep Analysis Tab",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Append to Deep Analysis Tab": {
+      "main": [
+        [
+          {
+            "node": "Mark Row Analyzed",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Mark Row Analyzed": {
+      "main": [
+        [
+          {
+            "node": "Slack - Analysis Ready",
             "type": "main",
             "index": 0
           }
@@ -511,17 +816,6 @@
       ]
     },
     "Write DocumentLink": {
-      "main": [
-        [
-          {
-            "node": "Run Deep Analysis",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Run Deep Analysis": {
       "main": [
         [
           {
