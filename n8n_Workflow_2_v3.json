@@ -86,7 +86,7 @@
           "mode": "list",
           "cachedResultName": "hermes-testing"
         },
-        "text": "=:rotating_light: *Tender approved — document needed*\n\n*{{ $json.Title }}*\n{{ ($json.Source || '').toString().toLowerCase().includes('vendorpanel') ? 'VendorPanel: log in, open the tender, click *Register Interest*, download the pack, upload it to Drive, then paste the file link into the DocumentLink column.' : (($json.Source || '').toString().toLowerCase().includes('austender') ? 'AusTender: open the ATM link, download the documents (most need no login), upload to Drive, then paste the file link into DocumentLink.' : 'Open the portal below, download the tender pack, upload it to Drive, then paste the file link into the DocumentLink column.') }}\n\nSource: {{ $json.Source }}\nPortal link: {{ $json.Link }}",
+        "text": "=:rotating_light: *Tender approved \u2014 document needed*\n\n*{{ $json.Title }}*\n{{ ($json.Source || '').toString().toLowerCase().includes('vendorpanel') ? 'VendorPanel: log in, open the tender, click *Register Interest*, download the pack, upload it to Drive, then paste the file link into the DocumentLink column.' : (($json.Source || '').toString().toLowerCase().includes('austender') ? 'AusTender: open the ATM link, download the documents (most need no login), upload to Drive, then paste the file link into DocumentLink.' : 'Open the portal below, download the tender pack, upload it to Drive, then paste the file link into the DocumentLink column.') }}\n\nSource: {{ $json.Source }}\nPortal link: {{ $json.Link }}",
         "otherOptions": {}
       },
       "id": "2f85e4d7-d612-4c71-b37d-80419d4fee9b",
@@ -278,7 +278,7 @@
     },
     {
       "parameters": {
-        "prompt": "=You are a tender analyst for a South East Queensland SECURITY (manpower guarding + electronic/CCTV) and COMMERCIAL CLEANING contractor. Read the full tender document below and extract the exact, contract-critical requirements. Where a value is not stated, use \"Not stated\" — never invent.\n\nReturn ONLY a valid JSON object (no markdown, no code fences, no prose):\n{\n  \"compliance_requirements\": \"every licence, certification, clearance, insurance level and registration required\",\n  \"pricing_matrix\": \"the pricing/schedule-of-rates structure — line items, units, GST, escalation clauses\",\n  \"scope_of_work\": \"4-6 sentence precise description of work, sites, hours/roster and deliverables\",\n  \"kpis_slas\": \"performance indicators, response times, reporting obligations\",\n  \"submission_requirements\": \"forms, referees, page limits, lodgement method\",\n  \"evaluation_criteria\": \"assessment criteria and weightings if given\",\n  \"red_flags\": \"incumbent advantage, prequalification, unusual indemnities, tight timeframe\",\n  \"bid_strategy\": \"3-5 sentences of practical advice on positioning a competitive bid\"\n}\n\nTender: {{ $json.title }}\n\nTENDER DOCUMENT:\n{{ $json.doc_text }}"
+        "prompt": "=You are a tender analyst for a South East Queensland SECURITY (manpower guarding + electronic/CCTV) and COMMERCIAL CLEANING contractor. Read the full tender document below and extract the exact, contract-critical requirements. Where a value is not stated, use \"Not stated\" \u2014 never invent.\n\nReturn ONLY a valid JSON object (no markdown, no code fences, no prose):\n{\n  \"compliance_requirements\": \"every licence, certification, clearance, insurance level and registration required\",\n  \"pricing_matrix\": \"the pricing/schedule-of-rates structure \u2014 line items, units, GST, escalation clauses\",\n  \"scope_of_work\": \"4-6 sentence precise description of work, sites, hours/roster and deliverables\",\n  \"kpis_slas\": \"performance indicators, response times, reporting obligations\",\n  \"submission_requirements\": \"forms, referees, page limits, lodgement method\",\n  \"evaluation_criteria\": \"assessment criteria and weightings if given\",\n  \"red_flags\": \"incumbent advantage, prequalification, unusual indemnities, tight timeframe\",\n  \"bid_strategy\": \"3-5 sentences of practical advice on positioning a competitive bid\"\n}\n\nTender: {{ $json.title }}\n\nTENDER DOCUMENT:\n{{ $json.doc_text }}"
       },
       "id": "87077709-472e-40be-812e-8343a406ca62",
       "name": "Deep Analysis (Gemini)",
@@ -561,21 +561,28 @@
     },
     {
       "parameters": {
-        "model": "google/gemini-2.5-flash-lite",
-        "options": {}
+        "model": {
+          "__rl": true,
+          "value": "gpt-4.1-mini",
+          "mode": "list",
+          "cachedResultName": "gpt-4.1-mini"
+        },
+        "options": {
+          "temperature": 0.3
+        }
       },
-      "type": "@n8n/n8n-nodes-langchain.lmChatOpenRouter",
-      "typeVersion": 1,
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.2,
       "position": [
         3880,
         3160
       ],
       "id": "e2283018-7530-4189-8941-7421368329ab",
-      "name": "OpenRouter Chat Model2",
+      "name": "OpenAI Chat Model2",
       "credentials": {
-        "openRouterApi": {
-          "id": "QhsMW1GW3kISMgNL",
-          "name": "N8N - 11/2/26"
+        "openAiApi": {
+          "id": "REPLACE_ME",
+          "name": "n8n free OpenAI API credits"
         }
       }
     }
@@ -801,7 +808,7 @@
         ]
       ]
     },
-    "OpenRouter Chat Model2": {
+    "OpenAI Chat Model2": {
       "ai_languageModel": [
         [
           {
