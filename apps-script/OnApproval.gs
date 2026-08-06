@@ -92,6 +92,17 @@ function onApprovalEdit(e) {
       return;
     }
 
+    // n8n writes DocumentLink back by matching on RowID. A blank RowID would
+    // make it APPEND a brand new row instead of updating this one, so refuse
+    // to fire and say so on the cell rather than quietly corrupting the sheet.
+    if (!payload.rowId) {
+      sheet.getRange(row, approvalCol)
+           .setNote('NOT sent — this row has no RowID, so n8n could not write ' +
+                    'the link back to it. Fill in RowID and re-approve.');
+      Logger.log('Row ' + row + ' has no RowID — refusing to fire.');
+      return;
+    }
+
     var res = UrlFetchApp.fetch(WEBHOOK_URL, {
       method: 'post',
       contentType: 'application/json',
