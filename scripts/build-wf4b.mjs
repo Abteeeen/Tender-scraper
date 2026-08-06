@@ -38,6 +38,15 @@ function mergeCookies(jar, setCookie) {
 }
 const jarToHeader = (jar) => Object.entries(jar || {}).map(([k, v]) => k + '=' + v).join('; ');
 
+// n8n returns the response payload under .body OR .data depending on how it
+// parsed the content-type, and sometimes as a Buffer. Read it one way.
+function bodyOf(res) {
+  const raw = res?.body ?? res?.data ?? '';
+  if (typeof raw === 'string') return raw;
+  if (raw && raw.type === 'Buffer' && Array.isArray(raw.data)) return Buffer.from(raw.data).toString('utf8');
+  return raw ? JSON.stringify(raw) : '';
+}
+
 // Pull a hidden input's value out of raw HTML.
 function hidden(html, name) {
   const re = new RegExp('<input[^>]*name="' + name + '"[^>]*>', 'i');
@@ -112,19 +121,15 @@ nodes.push({
 nodes.push({
   parameters: {
     jsCode: `${HELPERS}
-const res = $json;
-const raw = res.body ?? res.data ?? '';
-const html = typeof raw === 'string' ? raw
-           : (raw && raw.type === 'Buffer' && Array.isArray(raw.data))
-             ? Buffer.from(raw.data).toString('utf8')
-             : (raw ? JSON.stringify(raw) : '');
+const res  = $json;
+const html = bodyOf(res);
 const jar  = mergeCookies({}, res.headers?.['set-cookie']);
 
 const form = {
   __RequestVerificationToken: hidden(html, '__RequestVerificationToken'),
   ReturnUrl:                  hidden(html, 'ReturnUrl'),
   ClientId:                   hidden(html, 'ClientId') || 'vp.client',
-  SiteFlag:                   hidden(html, 'SiteFlag') || 'Unknown',
+  SiteFlag:                   hidden(html, 'SiteFlag') || 'VendorPanel',
   UsernameHasBeenChecked:     'False',
   OneTimePasswordRequired:    'False',
   MFAEnrollmentRequired:      'False',
@@ -212,7 +217,7 @@ nodes.push({
     jsCode: `${HELPERS}
 const prev = $('Parse Login Form').first().json;
 const res  = $json;
-const html = String(res.body || '');
+const html = bodyOf(res);
 const jar  = mergeCookies(prev.jar, res.headers?.['set-cookie']);
 
 // The page we get back should now be asking for a password.
@@ -400,7 +405,7 @@ nodes.push({
     jsCode: `${HELPERS}
 const prev = $('Merge Cookies B').first().json;
 const res  = $json;
-const html = String(res.body || '');
+const html = bodyOf(res);
 const jar  = mergeCookies(prev.jar, res.headers?.['set-cookie']);
 
 // Signed in when we hold an identity/session cookie and are no longer being
@@ -498,7 +503,7 @@ const items = $input.all();
 for (let i = 0; i < items.length; i++) {
   const res  = items[i].json;
   const job  = $('One Item Per Tender').all()[i].json;
-  const html = String(res.body || '');
+  const html = bodyOf(res);
 
   const absolute = (u) => {
     if (!u) return '';
