@@ -1,65 +1,34 @@
 {
-  "name": "Workflow 4 — VendorPanel Auto-Download (stock nodes only)",
+  "name": "Workflow 4 — VendorPanel Download (triggered on approval)",
   "nodes": [
     {
       "parameters": {
-        "rule": {
-          "interval": [
-            {
-              "field": "minutes",
-              "minutesInterval": 10
-            }
-          ]
-        }
+        "httpMethod": "POST",
+        "path": "vendorpanel-approved",
+        "responseMode": "onReceived",
+        "responseData": "allEntries",
+        "options": {}
       },
-      "id": "b-trig",
-      "name": "Poll Every 10 Min",
-      "type": "n8n-nodes-base.scheduleTrigger",
-      "typeVersion": 1.2,
+      "id": "b-hook",
+      "name": "On Approval (Webhook)",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
       "position": [
         240,
         300
-      ]
-    },
-    {
-      "parameters": {
-        "documentId": {
-          "__rl": true,
-          "value": "1YrekkkB-YjNAhWA1A-VYMxCcEl8A-UB5d627_zx7fEY",
-          "mode": "id"
-        },
-        "sheetName": {
-          "__rl": true,
-          "value": "Claude v3",
-          "mode": "name"
-        },
-        "options": {}
-      },
-      "id": "b-read",
-      "name": "Read Triage Sheet",
-      "type": "n8n-nodes-base.googleSheets",
-      "typeVersion": 4.5,
-      "position": [
-        470,
-        300
       ],
-      "credentials": {
-        "googleSheetsOAuth2Api": {
-          "id": "REPLACE_ME",
-          "name": "Google Sheets account"
-        }
-      }
+      "webhookId": "vendorpanel-approved"
     },
     {
       "parameters": {
-        "jsCode": "// The approval signal: a human ticked Approved, and no document exists yet.\nconst out = [];\nfor (const item of $input.all()) {\n  const r = item.json;\n  const approval = String(r.HumanApproval || '').trim().toLowerCase();\n  if (approval !== 'approved') continue;\n  if (String(r.DocumentLink || '').trim()) continue;\n  if (!/vendorpanel/i.test(String(r.Source || ''))) continue;\n\n  const link = String(r.Link || '').trim();\n  if (!/^https?:\\/\\//i.test(link)) continue;\n\n  out.push({ json: { rowId: r.RowID || '', title: r.Title || '', ref: r.Ref || '', link } });\n}\n// Only one login is needed no matter how many tenders; carry the list on item 1.\nreturn out.length ? [{ json: { tenders: out.map(o => o.json), count: out.length } }] : [];"
+        "jsCode": "// Apps Script posts one approved row. Validate it before we spend a login on it.\nconst b = $json.body || $json;\n\nconst tender = {\n  rowId: String(b.rowId || '').trim(),\n  title: String(b.title || '').trim(),\n  ref:   String(b.ref || '').trim(),\n  link:  String(b.link || '').trim(),\n  source: String(b.source || '').trim(),\n};\n\nif (!/^https?:\\/\\//i.test(tender.link)) {\n  throw new Error('Webhook payload has no usable Link: ' + JSON.stringify(b).slice(0, 300));\n}\nif (!/vendorpanel/i.test(tender.source)) {\n  // Not a VendorPanel tender — nothing for this workflow to fetch.\n  return [];\n}\n\nreturn [{ json: { tenders: [tender], count: 1 } }];"
       },
-      "id": "b-pick",
-      "name": "Approved, Awaiting Document",
+      "id": "b-valid",
+      "name": "Validate Payload",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        700,
+        470,
         300
       ]
     },
@@ -95,20 +64,20 @@
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
-        930,
+        700,
         300
       ]
     },
     {
       "parameters": {
-        "jsCode": "\n// --- tiny helpers -----------------------------------------------------------\n// Merge Set-Cookie headers into a cookie jar we carry by hand. n8n's HTTP node\n// has no cookie jar of its own, so we do this explicitly at every hop.\nfunction mergeCookies(jar, setCookie) {\n  const out = { ...(jar || {}) };\n  const list = Array.isArray(setCookie) ? setCookie : (setCookie ? [setCookie] : []);\n  for (const raw of list) {\n    const first = String(raw).split(';')[0];\n    const eq = first.indexOf('=');\n    if (eq < 1) continue;\n    const name = first.slice(0, eq).trim();\n    const val = first.slice(eq + 1).trim();\n    if (!name) continue;\n    if (val === '' || /expires=Thu, 01 Jan 1970/i.test(raw)) delete out[name];\n    else out[name] = val;\n  }\n  return out;\n}\nconst jarToHeader = (jar) => Object.entries(jar || {}).map(([k, v]) => k + '=' + v).join('; ');\n\n// Pull a hidden input's value out of raw HTML.\nfunction hidden(html, name) {\n  const re = new RegExp('<input[^>]*name=\"' + name + '\"[^>]*>', 'i');\n  const tag = (html || '').match(re);\n  if (!tag) return '';\n  const v = tag[0].match(/value=\"([^\"]*)\"/i);\n  return v ? v[1].replace(/&amp;/g, '&').replace(/&quot;/g, '\"').replace(/&#39;/g, \"'\") : '';\n}\n\nconst res  = $json;\nconst html = String(res.body || '');\nconst jar  = mergeCookies({}, res.headers?.['set-cookie']);\n\nconst form = {\n  __RequestVerificationToken: hidden(html, '__RequestVerificationToken'),\n  ReturnUrl:                  hidden(html, 'ReturnUrl'),\n  ClientId:                   hidden(html, 'ClientId') || 'vp.client',\n  SiteFlag:                   hidden(html, 'SiteFlag') || 'Unknown',\n  UsernameHasBeenChecked:     'False',\n  OneTimePasswordRequired:    'False',\n  MFAEnrollmentRequired:      'False',\n  PasswordVerified:           'False',\n  ExternalLoginScheme:        '',\n  ExtenalLoginDisplayName:    '',\n  RememberLogin:              'false',\n};\n\nif (!form.__RequestVerificationToken) {\n  throw new Error('No __RequestVerificationToken on the login page — the form has changed.');\n}\n\nreturn [{ json: {\n  tenders: $('Approved, Awaiting Document').first().json.tenders,\n  form,\n  cookieHeader: jarToHeader(jar),\n  jar,\n} }];"
+        "jsCode": "\n// --- tiny helpers -----------------------------------------------------------\n// Merge Set-Cookie headers into a cookie jar we carry by hand. n8n's HTTP node\n// has no cookie jar of its own, so we do this explicitly at every hop.\nfunction mergeCookies(jar, setCookie) {\n  const out = { ...(jar || {}) };\n  const list = Array.isArray(setCookie) ? setCookie : (setCookie ? [setCookie] : []);\n  for (const raw of list) {\n    const first = String(raw).split(';')[0];\n    const eq = first.indexOf('=');\n    if (eq < 1) continue;\n    const name = first.slice(0, eq).trim();\n    const val = first.slice(eq + 1).trim();\n    if (!name) continue;\n    if (val === '' || /expires=Thu, 01 Jan 1970/i.test(raw)) delete out[name];\n    else out[name] = val;\n  }\n  return out;\n}\nconst jarToHeader = (jar) => Object.entries(jar || {}).map(([k, v]) => k + '=' + v).join('; ');\n\n// Pull a hidden input's value out of raw HTML.\nfunction hidden(html, name) {\n  const re = new RegExp('<input[^>]*name=\"' + name + '\"[^>]*>', 'i');\n  const tag = (html || '').match(re);\n  if (!tag) return '';\n  const v = tag[0].match(/value=\"([^\"]*)\"/i);\n  return v ? v[1].replace(/&amp;/g, '&').replace(/&quot;/g, '\"').replace(/&#39;/g, \"'\") : '';\n}\n\nconst res  = $json;\nconst html = String(res.body || '');\nconst jar  = mergeCookies({}, res.headers?.['set-cookie']);\n\nconst form = {\n  __RequestVerificationToken: hidden(html, '__RequestVerificationToken'),\n  ReturnUrl:                  hidden(html, 'ReturnUrl'),\n  ClientId:                   hidden(html, 'ClientId') || 'vp.client',\n  SiteFlag:                   hidden(html, 'SiteFlag') || 'Unknown',\n  UsernameHasBeenChecked:     'False',\n  OneTimePasswordRequired:    'False',\n  MFAEnrollmentRequired:      'False',\n  PasswordVerified:           'False',\n  ExternalLoginScheme:        '',\n  ExtenalLoginDisplayName:    '',\n  RememberLogin:              'false',\n};\n\nif (!form.__RequestVerificationToken) {\n  throw new Error('No __RequestVerificationToken on the login page — the form has changed.');\n}\n\nreturn [{ json: {\n  tenders: $('Validate Payload').first().json.tenders,\n  form,\n  cookieHeader: jarToHeader(jar),\n  jar,\n} }];"
       },
       "id": "b-parse1",
       "name": "Parse Login Form",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        1160,
+        930,
         300
       ]
     },
@@ -215,7 +184,7 @@
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
-        1390,
+        1160,
         300
       ]
     },
@@ -228,7 +197,7 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        1620,
+        1390,
         300
       ]
     },
@@ -335,7 +304,7 @@
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
-        1850,
+        1620,
         300
       ]
     },
@@ -348,7 +317,7 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        2080,
+        1850,
         300
       ]
     },
@@ -380,7 +349,7 @@
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.2,
       "position": [
-        2310,
+        2080,
         300
       ]
     },
@@ -393,7 +362,7 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        2540,
+        2310,
         300
       ]
     },
@@ -433,7 +402,7 @@
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
-        2770,
+        2540,
         300
       ]
     },
@@ -446,7 +415,7 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        3000,
+        2770,
         300
       ]
     },
@@ -478,7 +447,7 @@
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.2,
       "position": [
-        3230,
+        3000,
         300
       ]
     },
@@ -513,7 +482,7 @@
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
-        3460,
+        3230,
         300
       ],
       "onError": "continueRegularOutput"
@@ -527,7 +496,7 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        3690,
+        3460,
         300
       ]
     },
@@ -553,7 +522,7 @@
       "type": "n8n-nodes-base.googleDrive",
       "typeVersion": 3,
       "position": [
-        3920,
+        3690,
         300
       ],
       "credentials": {
@@ -572,7 +541,7 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        4150,
+        3920,
         300
       ]
     },
@@ -606,7 +575,7 @@
       "type": "n8n-nodes-base.googleSheets",
       "typeVersion": 4.5,
       "position": [
-        4380,
+        4150,
         300
       ],
       "credentials": {
@@ -632,7 +601,7 @@
       "type": "n8n-nodes-base.slack",
       "typeVersion": 2.2,
       "position": [
-        4610,
+        4380,
         500
       ],
       "credentials": {
@@ -699,29 +668,18 @@
     }
   ],
   "connections": {
-    "Poll Every 10 Min": {
+    "On Approval (Webhook)": {
       "main": [
         [
           {
-            "node": "Read Triage Sheet",
+            "node": "Validate Payload",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Read Triage Sheet": {
-      "main": [
-        [
-          {
-            "node": "Approved, Awaiting Document",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Approved, Awaiting Document": {
+    "Validate Payload": {
       "main": [
         [
           {

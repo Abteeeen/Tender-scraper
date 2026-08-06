@@ -48,46 +48,47 @@ function hidden(html, name) {
 }
 `;
 
-// ────────────────────────────────────────────────────────── 1 trigger
-nodes.push({
-  parameters: { rule: { interval: [{ field: 'minutes', minutesInterval: 10 }] } },
-  id: 'b-trig', name: 'Poll Every 10 Min',
-  type: 'n8n-nodes-base.scheduleTrigger', typeVersion: 1.2, position: at(),
-});
-
-// ────────────────────────────────────────────────────────── 2 read sheet
+// ────────────────────────────────────────────────────────── 1 webhook
+// A real push trigger. Google Apps Script calls this the instant someone types
+// "Approved" in the sheet — no polling, no 10-minute wait.
 nodes.push({
   parameters: {
-    documentId: { __rl: true, value: SHEET_ID, mode: 'id' },
-    sheetName: { __rl: true, value: TAB, mode: 'name' },
+    httpMethod: 'POST',
+    path: 'vendorpanel-approved',
+    responseMode: 'onReceived',
+    responseData: 'allEntries',
     options: {},
   },
-  id: 'b-read', name: 'Read Triage Sheet',
-  type: 'n8n-nodes-base.googleSheets', typeVersion: 4.5, position: at(),
-  credentials: cred('googleSheetsOAuth2Api', 'Google Sheets account'),
+  id: 'b-hook', name: 'On Approval (Webhook)',
+  type: 'n8n-nodes-base.webhook', typeVersion: 2, position: at(),
+  webhookId: 'vendorpanel-approved',
 });
 
-// ────────────────────────────────────────────────────────── 3 pick jobs
+// ────────────────────────────────────────────────────────── 2 validate
 nodes.push({
   parameters: {
-    jsCode: `// The approval signal: a human ticked Approved, and no document exists yet.
-const out = [];
-for (const item of $input.all()) {
-  const r = item.json;
-  const approval = String(r.HumanApproval || '').trim().toLowerCase();
-  if (approval !== 'approved') continue;
-  if (String(r.DocumentLink || '').trim()) continue;
-  if (!/vendorpanel/i.test(String(r.Source || ''))) continue;
+    jsCode: `// Apps Script posts one approved row. Validate it before we spend a login on it.
+const b = $json.body || $json;
 
-  const link = String(r.Link || '').trim();
-  if (!/^https?:\\/\\//i.test(link)) continue;
+const tender = {
+  rowId: String(b.rowId || '').trim(),
+  title: String(b.title || '').trim(),
+  ref:   String(b.ref || '').trim(),
+  link:  String(b.link || '').trim(),
+  source: String(b.source || '').trim(),
+};
 
-  out.push({ json: { rowId: r.RowID || '', title: r.Title || '', ref: r.Ref || '', link } });
+if (!/^https?:\\/\\//i.test(tender.link)) {
+  throw new Error('Webhook payload has no usable Link: ' + JSON.stringify(b).slice(0, 300));
 }
-// Only one login is needed no matter how many tenders; carry the list on item 1.
-return out.length ? [{ json: { tenders: out.map(o => o.json), count: out.length } }] : [];`,
+if (!/vendorpanel/i.test(tender.source)) {
+  // Not a VendorPanel tender — nothing for this workflow to fetch.
+  return [];
+}
+
+return [{ json: { tenders: [tender], count: 1 } }];`,
   },
-  id: 'b-pick', name: 'Approved, Awaiting Document',
+  id: 'b-valid', name: 'Validate Payload',
   type: 'n8n-nodes-base.code', typeVersion: 2, position: at(),
 });
 
@@ -134,7 +135,7 @@ if (!form.__RequestVerificationToken) {
 }
 
 return [{ json: {
-  tenders: $('Approved, Awaiting Document').first().json.tenders,
+  tenders: $('Validate Payload').first().json.tenders,
   form,
   cookieHeader: jarToHeader(jar),
   jar,
@@ -588,9 +589,8 @@ nodes.push({
 });
 
 // ────────────────────────────────────────────────────────── wiring
-link('Poll Every 10 Min', 'Read Triage Sheet');
-link('Read Triage Sheet', 'Approved, Awaiting Document');
-link('Approved, Awaiting Document', 'GET Login Page');
+link('On Approval (Webhook)', 'Validate Payload');
+link('Validate Payload', 'GET Login Page');
 link('GET Login Page', 'Parse Login Form');
 link('Parse Login Form', 'POST Username');
 link('POST Username', 'Parse Password Form');
@@ -611,11 +611,11 @@ link('Build Drive Link', 'Write DocumentLink');
 link('Write DocumentLink', 'Slack - Pack Ready');
 
 const wf = {
-  name: 'Workflow 4 — VendorPanel Auto-Download (stock nodes only)',
+  name: 'Workflow 4 — VendorPanel Download (triggered on approval)',
   nodes, connections: conn,
   settings: { executionOrder: 'v1' },
   pinData: {},
 };
 
-fs.writeFileSync('/home/user/Tender-scraper/n8n_Workflow_4_VendorPanel_HTTP.json', JSON.stringify(wf, null, 2));
+fs.writeFileSync('/home/user/Tender-scraper/n8n_Workflow_4_VendorPanel_OnApproval.json', JSON.stringify(wf, null, 2));
 console.log('wrote', nodes.length, 'nodes');
