@@ -468,6 +468,54 @@ nodes.push({
   type: 'n8n-nodes-base.if', typeVersion: 2.2, position: at(),
 });
 
+// ────────────────────────────────────────── 10b establish member context
+// Landing straight on the download modal makes VendorPanel throw a server
+// error: the member-context cookies (emcc/emcctmp) are still all-zeros. A real
+// browser visits the members' tender list first, which sets them. Do the same.
+nodes.push({
+  parameters: {
+    url: 'https://www.vendorpanel.com.au/Members/?do=Tenders:AllTenders',
+    sendHeaders: true,
+    headerParameters: { parameters: [
+      { name: 'User-Agent', value: UA },
+      { name: 'Cookie', value: '={{ $json.cookieHeader }}' },
+      { name: 'Referer', value: 'https://www.vendorpanel.com.au/' },
+    ] },
+    options: {
+      response: { response: { fullResponse: true, neverError: true } },
+      redirect: { redirect: { followRedirects: true } },
+      timeout: 60000,
+    },
+  },
+  id: 'b-members', name: 'GET Members Tender List',
+  type: 'n8n-nodes-base.httpRequest', typeVersion: 4.2, position: at(),
+  onError: 'continueRegularOutput',
+});
+
+nodes.push({
+  parameters: {
+    jsCode: `${HELPERS}
+const prev = $('Confirm Session').first().json;
+const res  = $json;
+const jar  = mergeCookies(prev.jar, res.headers?.['set-cookie']);
+
+// emcc is the member context. All-zeros means none was established.
+const emcc = jar.emcc || '';
+const haveContext = Boolean(emcc) && !/^0+$/.test(emcc);
+
+return [{ json: {
+  tenders: prev.tenders,
+  jar,
+  cookieHeader: jarToHeader(jar),
+  emcc,
+  haveContext,
+  membersStatus: res.statusCode,
+} }];`,
+  },
+  id: 'b-memctx', name: 'Merge Member Context',
+  type: 'n8n-nodes-base.code', typeVersion: 2, position: at(),
+});
+
 // ────────────────────────────────────────────────────────── 11 fan out
 nodes.push({
   parameters: {
@@ -513,6 +561,8 @@ nodes.push({
     headerParameters: { parameters: [
       { name: 'User-Agent', value: UA },
       { name: 'Cookie', value: '={{ $json.cookieHeader }}' },
+      { name: 'Referer', value: 'https://www.vendorpanel.com.au/Members/?do=Tenders:AllTenders' },
+      { name: 'X-Requested-With', value: 'XMLHttpRequest' },
     ] },
     options: {
       response: { response: { fullResponse: true, neverError: true } },
@@ -571,7 +621,11 @@ for (let i = 0; i < items.length; i++) {
 
   if (!hasState) {
     out.push({ json: { ...job, ok: false,
-      reason: 'the download modal did not come back as a form',
+      reason: /An error has occurred|Oops/i.test(html)
+        ? 'VendorPanel returned its server-error page for this request'
+        : 'the download modal did not come back as a form',
+      serverError: (html.match(/reference\s+([A-Z0-9-]+)/i) || [])[1] || '',
+      emcc: $('Merge Member Context').first().json.emcc,
       httpStatus: res.statusCode,
       htmlLength: html.length,
       pageTitle: (html.match(/<title>([\\s\\S]*?)<\\/title>/i) || [])[1]?.replace(/\\s+/g, ' ').trim() || '',
@@ -773,7 +827,9 @@ link('Follow Redirect 1', 'Merge Cookies B');
 link('Merge Cookies B', 'Follow Redirect 2');
 link('Follow Redirect 2', 'Confirm Session');
 link('Confirm Session', 'Logged In?');
-link('Logged In?', 'One Item Per Tender', 0);
+link('Logged In?', 'GET Members Tender List', 0);
+link('GET Members Tender List', 'Merge Member Context');
+link('Merge Member Context', 'One Item Per Tender');
 link('Logged In?', 'Slack - Login Failed', 1);
 link('One Item Per Tender', 'GET Download Modal');
 link('GET Download Modal', 'Build Postback');
