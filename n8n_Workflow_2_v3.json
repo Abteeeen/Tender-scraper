@@ -585,6 +585,19 @@
           "name": "n8n free OpenAI API credits"
         }
       }
+    },
+    {
+      "parameters": {
+        "inputSource": "passthrough"
+      },
+      "id": "wf2-called",
+      "name": "Called by Workflow 4",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        1840,
+        3200
+      ]
     }
   ],
   "connections": {
@@ -814,6 +827,17 @@
           {
             "node": "Deep Analysis (Gemini)",
             "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Called by Workflow 4": {
+      "main": [
+        [
+          {
+            "node": "Read Triage Sheet",
+            "type": "main",
             "index": 0
           }
         ]
