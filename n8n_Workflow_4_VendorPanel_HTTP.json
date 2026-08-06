@@ -1,0 +1,930 @@
+{
+  "name": "Workflow 4 — VendorPanel Auto-Download (stock nodes only)",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "minutes",
+              "minutesInterval": 10
+            }
+          ]
+        }
+      },
+      "id": "b-trig",
+      "name": "Poll Every 10 Min",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        240,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "1YrekkkB-YjNAhWA1A-VYMxCcEl8A-UB5d627_zx7fEY",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Claude v3",
+          "mode": "name"
+        },
+        "options": {}
+      },
+      "id": "b-read",
+      "name": "Read Triage Sheet",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        470,
+        300
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "REPLACE_ME",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// The approval signal: a human ticked Approved, and no document exists yet.\nconst out = [];\nfor (const item of $input.all()) {\n  const r = item.json;\n  const approval = String(r.HumanApproval || '').trim().toLowerCase();\n  if (approval !== 'approved') continue;\n  if (String(r.DocumentLink || '').trim()) continue;\n  if (!/vendorpanel/i.test(String(r.Source || ''))) continue;\n\n  const link = String(r.Link || '').trim();\n  if (!/^https?:\\/\\//i.test(link)) continue;\n\n  out.push({ json: { rowId: r.RowID || '', title: r.Title || '', ref: r.Ref || '', link } });\n}\n// Only one login is needed no matter how many tenders; carry the list on item 1.\nreturn out.length ? [{ json: { tenders: out.map(o => o.json), count: out.length } }] : [];"
+      },
+      "id": "b-pick",
+      "name": "Approved, Awaiting Document",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        700,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "url": "https://www.vendorpanel.com.au/",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "User-Agent",
+              "value": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "fullResponse": true,
+              "neverError": true
+            }
+          },
+          "redirect": {
+            "redirect": {
+              "followRedirects": true
+            }
+          },
+          "timeout": 45000
+        }
+      },
+      "id": "b-getlogin",
+      "name": "GET Login Page",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        930,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "\n// --- tiny helpers -----------------------------------------------------------\n// Merge Set-Cookie headers into a cookie jar we carry by hand. n8n's HTTP node\n// has no cookie jar of its own, so we do this explicitly at every hop.\nfunction mergeCookies(jar, setCookie) {\n  const out = { ...(jar || {}) };\n  const list = Array.isArray(setCookie) ? setCookie : (setCookie ? [setCookie] : []);\n  for (const raw of list) {\n    const first = String(raw).split(';')[0];\n    const eq = first.indexOf('=');\n    if (eq < 1) continue;\n    const name = first.slice(0, eq).trim();\n    const val = first.slice(eq + 1).trim();\n    if (!name) continue;\n    if (val === '' || /expires=Thu, 01 Jan 1970/i.test(raw)) delete out[name];\n    else out[name] = val;\n  }\n  return out;\n}\nconst jarToHeader = (jar) => Object.entries(jar || {}).map(([k, v]) => k + '=' + v).join('; ');\n\n// Pull a hidden input's value out of raw HTML.\nfunction hidden(html, name) {\n  const re = new RegExp('<input[^>]*name=\"' + name + '\"[^>]*>', 'i');\n  const tag = (html || '').match(re);\n  if (!tag) return '';\n  const v = tag[0].match(/value=\"([^\"]*)\"/i);\n  return v ? v[1].replace(/&amp;/g, '&').replace(/&quot;/g, '\"').replace(/&#39;/g, \"'\") : '';\n}\n\nconst res  = $json;\nconst html = String(res.body || '');\nconst jar  = mergeCookies({}, res.headers?.['set-cookie']);\n\nconst form = {\n  __RequestVerificationToken: hidden(html, '__RequestVerificationToken'),\n  ReturnUrl:                  hidden(html, 'ReturnUrl'),\n  ClientId:                   hidden(html, 'ClientId') || 'vp.client',\n  SiteFlag:                   hidden(html, 'SiteFlag') || 'Unknown',\n  UsernameHasBeenChecked:     'False',\n  OneTimePasswordRequired:    'False',\n  MFAEnrollmentRequired:      'False',\n  PasswordVerified:           'False',\n  ExternalLoginScheme:        '',\n  ExtenalLoginDisplayName:    '',\n  RememberLogin:              'false',\n};\n\nif (!form.__RequestVerificationToken) {\n  throw new Error('No __RequestVerificationToken on the login page — the form has changed.');\n}\n\nreturn [{ json: {\n  tenders: $('Approved, Awaiting Document').first().json.tenders,\n  form,\n  cookieHeader: jarToHeader(jar),\n  jar,\n} }];"
+      },
+      "id": "b-parse1",
+      "name": "Parse Login Form",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1160,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://login.vendorpanel.com.au/account/Login",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "User-Agent",
+              "value": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36"
+            },
+            {
+              "name": "Cookie",
+              "value": "={{ $json.cookieHeader }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/x-www-form-urlencoded"
+            },
+            {
+              "name": "Origin",
+              "value": "https://login.vendorpanel.com.au"
+            },
+            {
+              "name": "Referer",
+              "value": "https://login.vendorpanel.com.au/Account/Login"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "form-urlencoded",
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "UserName",
+              "value": "={{ $env.VP_USER }}"
+            },
+            {
+              "name": "__RequestVerificationToken",
+              "value": "={{ $json.form.__RequestVerificationToken }}"
+            },
+            {
+              "name": "ReturnUrl",
+              "value": "={{ $json.form.ReturnUrl }}"
+            },
+            {
+              "name": "ClientId",
+              "value": "={{ $json.form.ClientId }}"
+            },
+            {
+              "name": "SiteFlag",
+              "value": "={{ $json.form.SiteFlag }}"
+            },
+            {
+              "name": "UsernameHasBeenChecked",
+              "value": "False"
+            },
+            {
+              "name": "OneTimePasswordRequired",
+              "value": "False"
+            },
+            {
+              "name": "MFAEnrollmentRequired",
+              "value": "False"
+            },
+            {
+              "name": "PasswordVerified",
+              "value": "False"
+            },
+            {
+              "name": "ExternalLoginScheme",
+              "value": ""
+            },
+            {
+              "name": "ExtenalLoginDisplayName",
+              "value": ""
+            },
+            {
+              "name": "button",
+              "value": "Next"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "fullResponse": true,
+              "neverError": true
+            }
+          },
+          "redirect": {
+            "redirect": {
+              "followRedirects": true
+            }
+          },
+          "timeout": 45000
+        }
+      },
+      "id": "b-post1",
+      "name": "POST Username",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1390,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "\n// --- tiny helpers -----------------------------------------------------------\n// Merge Set-Cookie headers into a cookie jar we carry by hand. n8n's HTTP node\n// has no cookie jar of its own, so we do this explicitly at every hop.\nfunction mergeCookies(jar, setCookie) {\n  const out = { ...(jar || {}) };\n  const list = Array.isArray(setCookie) ? setCookie : (setCookie ? [setCookie] : []);\n  for (const raw of list) {\n    const first = String(raw).split(';')[0];\n    const eq = first.indexOf('=');\n    if (eq < 1) continue;\n    const name = first.slice(0, eq).trim();\n    const val = first.slice(eq + 1).trim();\n    if (!name) continue;\n    if (val === '' || /expires=Thu, 01 Jan 1970/i.test(raw)) delete out[name];\n    else out[name] = val;\n  }\n  return out;\n}\nconst jarToHeader = (jar) => Object.entries(jar || {}).map(([k, v]) => k + '=' + v).join('; ');\n\n// Pull a hidden input's value out of raw HTML.\nfunction hidden(html, name) {\n  const re = new RegExp('<input[^>]*name=\"' + name + '\"[^>]*>', 'i');\n  const tag = (html || '').match(re);\n  if (!tag) return '';\n  const v = tag[0].match(/value=\"([^\"]*)\"/i);\n  return v ? v[1].replace(/&amp;/g, '&').replace(/&quot;/g, '\"').replace(/&#39;/g, \"'\") : '';\n}\n\nconst prev = $('Parse Login Form').first().json;\nconst res  = $json;\nconst html = String(res.body || '');\nconst jar  = mergeCookies(prev.jar, res.headers?.['set-cookie']);\n\n// The page we get back should now be asking for a password.\nconst wantsPassword = /type=\"password\"/i.test(html);\nconst mfa = /OneTimePassword|MFA|verification code|authenticator/i.test(html) &&\n            !/name=\"MFAEnrollmentRequired\" value=\"False\"/i.test(html);\n\nconst form = {\n  __RequestVerificationToken: hidden(html, '__RequestVerificationToken') || prev.form.__RequestVerificationToken,\n  ReturnUrl:  hidden(html, 'ReturnUrl') || prev.form.ReturnUrl,\n  ClientId:   hidden(html, 'ClientId') || prev.form.ClientId,\n  SiteFlag:   hidden(html, 'SiteFlag') || prev.form.SiteFlag,\n  UsernameHasBeenChecked: hidden(html, 'UsernameHasBeenChecked') || 'True',\n  OneTimePasswordRequired: hidden(html, 'OneTimePasswordRequired') || 'False',\n  MFAEnrollmentRequired:   hidden(html, 'MFAEnrollmentRequired') || 'False',\n  PasswordVerified:        'False',\n};\n\nreturn [{ json: {\n  tenders: prev.tenders,\n  form,\n  jar,\n  cookieHeader: jarToHeader(jar),\n  wantsPassword,\n  mfa,\n  // kept for debugging a failed run without dumping the whole page\n  snippet: html.replace(/<script[\\s\\S]*?<\\/script>/gi, '').slice(0, 600),\n} }];"
+      },
+      "id": "b-parse2",
+      "name": "Parse Password Form",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1620,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://login.vendorpanel.com.au/account/Login",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "User-Agent",
+              "value": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36"
+            },
+            {
+              "name": "Cookie",
+              "value": "={{ $json.cookieHeader }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/x-www-form-urlencoded"
+            },
+            {
+              "name": "Origin",
+              "value": "https://login.vendorpanel.com.au"
+            },
+            {
+              "name": "Referer",
+              "value": "https://login.vendorpanel.com.au/Account/Login"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "form-urlencoded",
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "UserName",
+              "value": "={{ $env.VP_USER }}"
+            },
+            {
+              "name": "Password",
+              "value": "={{ $env.VP_PASS }}"
+            },
+            {
+              "name": "__RequestVerificationToken",
+              "value": "={{ $json.form.__RequestVerificationToken }}"
+            },
+            {
+              "name": "ReturnUrl",
+              "value": "={{ $json.form.ReturnUrl }}"
+            },
+            {
+              "name": "ClientId",
+              "value": "={{ $json.form.ClientId }}"
+            },
+            {
+              "name": "SiteFlag",
+              "value": "={{ $json.form.SiteFlag }}"
+            },
+            {
+              "name": "UsernameHasBeenChecked",
+              "value": "True"
+            },
+            {
+              "name": "OneTimePasswordRequired",
+              "value": "={{ $json.form.OneTimePasswordRequired }}"
+            },
+            {
+              "name": "MFAEnrollmentRequired",
+              "value": "={{ $json.form.MFAEnrollmentRequired }}"
+            },
+            {
+              "name": "PasswordVerified",
+              "value": "False"
+            },
+            {
+              "name": "RememberLogin",
+              "value": "true"
+            },
+            {
+              "name": "button",
+              "value": "Next"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "fullResponse": true,
+              "neverError": true
+            }
+          },
+          "redirect": {
+            "redirect": {
+              "followRedirects": true
+            }
+          },
+          "timeout": 45000
+        }
+      },
+      "id": "b-post2",
+      "name": "POST Password",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1850,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "\n// --- tiny helpers -----------------------------------------------------------\n// Merge Set-Cookie headers into a cookie jar we carry by hand. n8n's HTTP node\n// has no cookie jar of its own, so we do this explicitly at every hop.\nfunction mergeCookies(jar, setCookie) {\n  const out = { ...(jar || {}) };\n  const list = Array.isArray(setCookie) ? setCookie : (setCookie ? [setCookie] : []);\n  for (const raw of list) {\n    const first = String(raw).split(';')[0];\n    const eq = first.indexOf('=');\n    if (eq < 1) continue;\n    const name = first.slice(0, eq).trim();\n    const val = first.slice(eq + 1).trim();\n    if (!name) continue;\n    if (val === '' || /expires=Thu, 01 Jan 1970/i.test(raw)) delete out[name];\n    else out[name] = val;\n  }\n  return out;\n}\nconst jarToHeader = (jar) => Object.entries(jar || {}).map(([k, v]) => k + '=' + v).join('; ');\n\n// Pull a hidden input's value out of raw HTML.\nfunction hidden(html, name) {\n  const re = new RegExp('<input[^>]*name=\"' + name + '\"[^>]*>', 'i');\n  const tag = (html || '').match(re);\n  if (!tag) return '';\n  const v = tag[0].match(/value=\"([^\"]*)\"/i);\n  return v ? v[1].replace(/&amp;/g, '&').replace(/&quot;/g, '\"').replace(/&#39;/g, \"'\") : '';\n}\n\nconst prev = $('Parse Password Form').first().json;\nconst res  = $json;\nconst html = String(res.body || '');\nconst jar  = mergeCookies(prev.jar, res.headers?.['set-cookie']);\n\n// Signed in when we hold an identity/session cookie and are no longer being\n// shown a password box.\nconst names = Object.keys(jar);\nconst hasAuth = names.some(n => /idsrv|\\.AspNet|ASP\\.NET_SessionId|vp/i.test(n));\nconst stillAsking = /type=\"password\"/i.test(html);\nconst badCreds = /invalid|incorrect|not recognised|not recognized/i.test(html) && stillAsking;\n\nconst ok = hasAuth && !stillAsking;\n\nreturn [{ json: {\n  tenders: prev.tenders,\n  jar,\n  cookieHeader: jarToHeader(jar),\n  ok,\n  cookieNames: names,\n  reason: ok ? '' : (badCreds ? 'credentials rejected'\n        : stillAsking ? 'still on the password step (MFA, or a field the form now wants)'\n        : 'no session cookie came back'),\n  snippet: html.replace(/<script[\\s\\S]*?<\\/script>/gi, '').slice(0, 600),\n} }];"
+      },
+      "id": "b-session",
+      "name": "Confirm Session",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2080,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "logged-in",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              },
+              "leftValue": "={{ $json.ok }}",
+              "rightValue": ""
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "b-gate1",
+      "name": "Logged In?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        2310,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// One item per tender, each carrying the session cookie.\nconst s = $json;\nreturn (s.tenders || []).map(t => ({ json: { ...t, cookieHeader: s.cookieHeader } }));"
+      },
+      "id": "b-fan",
+      "name": "One Item Per Tender",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2540,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "url": "={{ $json.link }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "User-Agent",
+              "value": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36"
+            },
+            {
+              "name": "Cookie",
+              "value": "={{ $json.cookieHeader }}"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "fullResponse": true,
+              "neverError": true
+            }
+          },
+          "redirect": {
+            "redirect": {
+              "followRedirects": true
+            }
+          },
+          "timeout": 60000
+        }
+      },
+      "id": "b-tender",
+      "name": "GET Tender Page",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2770,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "\n// --- tiny helpers -----------------------------------------------------------\n// Merge Set-Cookie headers into a cookie jar we carry by hand. n8n's HTTP node\n// has no cookie jar of its own, so we do this explicitly at every hop.\nfunction mergeCookies(jar, setCookie) {\n  const out = { ...(jar || {}) };\n  const list = Array.isArray(setCookie) ? setCookie : (setCookie ? [setCookie] : []);\n  for (const raw of list) {\n    const first = String(raw).split(';')[0];\n    const eq = first.indexOf('=');\n    if (eq < 1) continue;\n    const name = first.slice(0, eq).trim();\n    const val = first.slice(eq + 1).trim();\n    if (!name) continue;\n    if (val === '' || /expires=Thu, 01 Jan 1970/i.test(raw)) delete out[name];\n    else out[name] = val;\n  }\n  return out;\n}\nconst jarToHeader = (jar) => Object.entries(jar || {}).map(([k, v]) => k + '=' + v).join('; ');\n\n// Pull a hidden input's value out of raw HTML.\nfunction hidden(html, name) {\n  const re = new RegExp('<input[^>]*name=\"' + name + '\"[^>]*>', 'i');\n  const tag = (html || '').match(re);\n  if (!tag) return '';\n  const v = tag[0].match(/value=\"([^\"]*)\"/i);\n  return v ? v[1].replace(/&amp;/g, '&').replace(/&quot;/g, '\"').replace(/&#39;/g, \"'\") : '';\n}\n\n// Find the pack's download URL in the tender page HTML.\nconst out = [];\nconst items = $input.all();\n\nfor (let i = 0; i < items.length; i++) {\n  const res  = items[i].json;\n  const job  = $('One Item Per Tender').all()[i].json;\n  const html = String(res.body || '');\n\n  const absolute = (u) => {\n    if (!u) return '';\n    if (/^https?:\\/\\//i.test(u)) return u;\n    if (u.startsWith('//')) return 'https:' + u;\n    if (u.startsWith('/')) return 'https://www.vendorpanel.com.au' + u;\n    return 'https://www.vendorpanel.com.au/' + u;\n  };\n\n  // every anchor on the page, with its href and its inner text\n  const anchors = [...html.matchAll(/<a\\b([^>]*)>([\\s\\S]*?)<\\/a>/gi)].map((m) => {\n    const attrs = m[1] || '';\n    const href  = (attrs.match(/href=\"([^\"]*)\"/i) || [])[1] || '';\n    const text  = (m[2] || '').replace(/<[^>]+>/g, ' ').replace(/\\s+/g, ' ').trim();\n    return { href, text, attrs };\n  });\n\n  let hit = null;\n  let how = '';\n\n  // 1. a direct link to a document file\n  hit = anchors.find((a) => /\\.(zip|pdf|docx?|xlsx?)(\\?|$)/i.test(a.href));\n  if (hit) how = 'direct file link';\n\n  // 2. a link whose URL looks like a download handler\n  if (!hit) {\n    hit = anchors.find((a) => /download|getfile|attachment|document/i.test(a.href));\n    if (hit) how = 'download handler URL';\n  }\n\n  // 3. a link whose tooltip or visible text says download\n  if (!hit) {\n    hit = anchors.find((a) =>\n      /download/i.test(a.attrs) || /^\\s*download/i.test(a.text));\n    if (hit) how = 'link labelled download';\n  }\n\n  if (hit && hit.href) {\n    out.push({ json: { ...job, ok: true, how, downloadUrl: absolute(hit.href) } });\n  } else {\n    // Hand back a few candidate anchors so the selector can be fixed in one pass\n    // instead of guessing blind.\n    const hint = anchors\n      .filter((a) => /doc|file|attach|pack|down/i.test(a.href + ' ' + a.text))\n      .slice(0, 6)\n      .map((a) => a.text.slice(0, 40) + ' -> ' + a.href.slice(0, 120));\n\n    out.push({ json: {\n      ...job, ok: false,\n      reason: /type=\"password\"|Account\\/Login/i.test(html)\n        ? 'session was not accepted on the tender page'\n        : 'no download link found in the page',\n      candidates: hint,\n      httpStatus: res.statusCode,\n    } });\n  }\n}\nreturn out;"
+      },
+      "id": "b-find",
+      "name": "Find Pack URL",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3000,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "found",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              },
+              "leftValue": "={{ $json.ok }}",
+              "rightValue": ""
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "b-gate2",
+      "name": "Pack URL Found?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        3230,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "url": "={{ $json.downloadUrl }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "User-Agent",
+              "value": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36"
+            },
+            {
+              "name": "Cookie",
+              "value": "={{ $json.cookieHeader }}"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "file",
+              "outputPropertyName": "data"
+            }
+          },
+          "timeout": 180000
+        }
+      },
+      "id": "b-dl",
+      "name": "Download Pack",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        3460,
+        300
+      ],
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const out = [];\nconst jobs = $('Pack URL Found?').all();\nconst items = $input.all();\n\nfor (let i = 0; i < items.length; i++) {\n  const job = jobs[i]?.json || {};\n  const bin = items[i].binary?.data;\n\n  const base = String(job.ref || job.rowId || job.title || 'tender')\n    .slice(0, 60).replace(/[\\\\/:*?\"<>|]/g, '_').trim();\n\n  let ext = bin?.fileExtension || '';\n  if (!ext) {\n    const mime = bin?.mimeType || '';\n    ext = /zip/i.test(mime) ? 'zip' : /pdf/i.test(mime) ? 'pdf'\n        : /word|document/i.test(mime) ? 'docx' : 'bin';\n  }\n\n  out.push({ json: { ...job, fileName: base + '_pack.' + ext }, binary: items[i].binary });\n}\nreturn out;"
+      },
+      "id": "b-name",
+      "name": "Name the File",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3690,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "name": "={{ $json.fileName }}",
+        "driveId": {
+          "__rl": true,
+          "value": "My Drive",
+          "mode": "list",
+          "cachedResultName": "My Drive"
+        },
+        "folderId": {
+          "__rl": true,
+          "value": "root",
+          "mode": "list",
+          "cachedResultName": "/ ← CHANGE ME to Tender Packs"
+        },
+        "options": {}
+      },
+      "id": "b-drive",
+      "name": "Upload to Drive",
+      "type": "n8n-nodes-base.googleDrive",
+      "typeVersion": 3,
+      "position": [
+        3920,
+        300
+      ],
+      "credentials": {
+        "googleDriveOAuth2Api": {
+          "id": "REPLACE_ME",
+          "name": "Google Drive account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const out = [];\nconst jobs = $('Name the File').all();\nconst items = $input.all();\nfor (let i = 0; i < items.length; i++) {\n  const up = items[i].json;\n  const job = jobs[i]?.json || {};\n  const id = up.id || up.fileId;\n  out.push({ json: {\n    RowID: job.rowId,\n    DocumentLink: id ? 'https://drive.google.com/file/d/' + id + '/view' : (up.webViewLink || ''),\n    title: job.title,\n  } });\n}\nreturn out;"
+      },
+      "id": "b-mklink",
+      "name": "Build Drive Link",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        4150,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "appendOrUpdate",
+        "documentId": {
+          "__rl": true,
+          "value": "1YrekkkB-YjNAhWA1A-VYMxCcEl8A-UB5d627_zx7fEY",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Claude v3",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "RowID": "={{ $json.RowID }}",
+            "DocumentLink": "={{ $json.DocumentLink }}"
+          },
+          "matchingColumns": [
+            "RowID"
+          ]
+        },
+        "options": {}
+      },
+      "id": "b-write",
+      "name": "Write DocumentLink",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        4380,
+        300
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "REPLACE_ME",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "select": "channel",
+        "channelId": {
+          "__rl": true,
+          "value": "#tenders",
+          "mode": "name"
+        },
+        "text": "=📦 *Tender pack retrieved*\n\n*{{ $json.title }}*\n{{ $json.DocumentLink }}\n\n_Deep analysis runs within 5 minutes._",
+        "otherOptions": {}
+      },
+      "id": "b-ok",
+      "name": "Slack - Pack Ready",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.2,
+      "position": [
+        4610,
+        500
+      ],
+      "credentials": {
+        "slackApi": {
+          "id": "REPLACE_ME",
+          "name": "Slack account"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "select": "channel",
+        "channelId": {
+          "__rl": true,
+          "value": "#tenders",
+          "mode": "name"
+        },
+        "text": "=⚠️ *VendorPanel login failed*\n\nReason: {{ $json.reason }}\nCookies seen: {{ $json.cookieNames }}\n\n_Nothing was downloaded this run._",
+        "otherOptions": {}
+      },
+      "id": "b-failLogin",
+      "name": "Slack - Login Failed",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.2,
+      "position": [
+        2310,
+        700
+      ],
+      "credentials": {
+        "slackApi": {
+          "id": "REPLACE_ME",
+          "name": "Slack account"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "select": "channel",
+        "channelId": {
+          "__rl": true,
+          "value": "#tenders",
+          "mode": "name"
+        },
+        "text": "=⚠️ *Could not auto-download this pack*\n\n*{{ $json.title }}*\n{{ $json.link }}\n\nReason: {{ $json.reason }}\n\n_Fetch it by hand and paste the Drive link into DocumentLink._",
+        "otherOptions": {}
+      },
+      "id": "b-failPack",
+      "name": "Slack - Manual Download Needed",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.2,
+      "position": [
+        3230,
+        700
+      ],
+      "credentials": {
+        "slackApi": {
+          "id": "REPLACE_ME",
+          "name": "Slack account"
+        }
+      },
+      "onError": "continueRegularOutput"
+    }
+  ],
+  "connections": {
+    "Poll Every 10 Min": {
+      "main": [
+        [
+          {
+            "node": "Read Triage Sheet",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read Triage Sheet": {
+      "main": [
+        [
+          {
+            "node": "Approved, Awaiting Document",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Approved, Awaiting Document": {
+      "main": [
+        [
+          {
+            "node": "GET Login Page",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "GET Login Page": {
+      "main": [
+        [
+          {
+            "node": "Parse Login Form",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Login Form": {
+      "main": [
+        [
+          {
+            "node": "POST Username",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "POST Username": {
+      "main": [
+        [
+          {
+            "node": "Parse Password Form",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Password Form": {
+      "main": [
+        [
+          {
+            "node": "POST Password",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "POST Password": {
+      "main": [
+        [
+          {
+            "node": "Confirm Session",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Confirm Session": {
+      "main": [
+        [
+          {
+            "node": "Logged In?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Logged In?": {
+      "main": [
+        [
+          {
+            "node": "One Item Per Tender",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Slack - Login Failed",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "One Item Per Tender": {
+      "main": [
+        [
+          {
+            "node": "GET Tender Page",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "GET Tender Page": {
+      "main": [
+        [
+          {
+            "node": "Find Pack URL",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Find Pack URL": {
+      "main": [
+        [
+          {
+            "node": "Pack URL Found?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Pack URL Found?": {
+      "main": [
+        [
+          {
+            "node": "Download Pack",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Slack - Manual Download Needed",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Download Pack": {
+      "main": [
+        [
+          {
+            "node": "Name the File",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Name the File": {
+      "main": [
+        [
+          {
+            "node": "Upload to Drive",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Upload to Drive": {
+      "main": [
+        [
+          {
+            "node": "Build Drive Link",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Drive Link": {
+      "main": [
+        [
+          {
+            "node": "Write DocumentLink",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Write DocumentLink": {
+      "main": [
+        [
+          {
+            "node": "Slack - Pack Ready",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "pinData": {}
+}
