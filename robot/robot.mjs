@@ -167,56 +167,95 @@ async function login(page) {
 async function downloadPack(context, job) {
   const page = await context.newPage();
   try {
-    log(`   opening tender page…`);
-    await page.goto(job.link, { waitUntil: 'domcontentloaded', timeout: 60000 });
+    // The download control does NOT live on the tender's own page — it is an
+    // icon on the members' tender list, and it opens a modal with a Download
+    // button. Calling the modal's URL directly returns a server error, so the
+    // only way through is to drive the real UI. Hence this robot.
+    log('   opening members tender list…');
+    await page.goto('https://www.vendorpanel.com.au/Members/?do=Tenders:AllTenders',
+      { waitUntil: 'domcontentloaded', timeout: 60000 });
     await page.waitForLoadState('networkidle', { timeout: 25000 }).catch(() => {});
 
-    // Some tenders gate documents behind an interest/accept step.
-    for (const label of ['Register Interest', 'Register interest', 'Accept', 'I Accept', 'Continue', 'Follow']) {
-      const btn = page.getByRole('button', { name: new RegExp('^' + label + '$', 'i') })
-        .or(page.locator(`a:has-text("${label}")`)).first();
-      if (await btn.count().catch(() => 0)) {
-        await btn.click({ timeout: 8000 }).catch(() => {});
-        log(`   → clicked "${label}"`);
-        await page.waitForTimeout(2500);
-      }
+    // Narrow the list down to this tender. The VP reference (e.g. VP517599) is
+    // embedded in the sheet's Link as ...<guid>s517599s..., so prefer that;
+    // fall back to the title.
+    const vpRef = (String(job.link || '').match(/id=[0-9a-f]{32}s(\d+)s/i) || [])[1] || '';
+    const needle = vpRef ? `VP${vpRef}` : job.title.slice(0, 60);
+
+    const search = page.locator('input[id*="Search" i], input[name*="Search" i], input[placeholder*="Search" i]').first();
+    if (await search.count().catch(() => 0)) {
+      await search.fill(vpRef || job.title.slice(0, 40));
+      await search.press('Enter').catch(() => {});
+      await page.waitForLoadState('networkidle', { timeout: 20000 }).catch(() => {});
+      log(`   filtered list by "${vpRef || job.title.slice(0, 40)}"`);
     }
 
-    // The download control is an icon on the tender card. Try the most likely
-    // shapes, widest net last. Log which one matched so this can be tightened.
-    const candidates = [
-      { why: 'title/aria contains download', loc: page.locator('[title*="ownload" i], [aria-label*="ownload" i]') },
-      { why: 'anchor to a zip/pdf',          loc: page.locator('a[href$=".zip"], a[href$=".pdf"], a[href*="ownload" i]') },
-      { why: 'download icon class',          loc: page.locator('i[class*="download" i], span[class*="download" i], img[src*="download" i]') },
-      { why: 'button labelled download',     loc: page.getByRole('button', { name: /download/i }) },
-    ];
-
-    const dl = context.waitForEvent('download', { timeout: 30000 }).catch(() => null);
-    let clicked = false;
-    for (const c of candidates) {
-      const n = await c.loc.count().catch(() => 0);
-      if (n > 0) {
-        log(`   → found ${n} match(es): ${c.why} — clicking first`);
-        await c.loc.first().click({ timeout: 10000 }).catch(() => {});
-        clicked = true;
-        break;
-      }
-    }
-    if (!clicked) {
-      log('   ⚠ no download control found');
-      await shot(page, 'no-download-control');
+    // Find the row that mentions this tender.
+    const row = page.locator('tr, div').filter({ hasText: needle }).last();
+    if (!(await row.count().catch(() => 0))) {
+      log(`   ⚠ could not find a row for ${needle}`);
+      await shot(page, 'row-not-found');
       return null;
     }
 
-    const download = await dl;
+    // Downloading requires the tender to be Followed — unfollowed rows show the
+    // icon greyed out. Follow it first if needed.
+    const follow = row.getByText(/^\s*Follow\s*$/i).first();
+    if (await follow.count().catch(() => 0)) {
+      await follow.click({ timeout: 8000 }).catch(() => {});
+      log('   → followed the tender (required before download)');
+      await page.waitForTimeout(2500);
+    }
+
+    // The download icon inside that row.
+    const icon = row.locator('[title*="ownload" i], [aria-label*="ownload" i], a[href*="ownload" i], img[src*="ownload" i]').first();
+    if (!(await icon.count().catch(() => 0))) {
+      log('   ⚠ no download icon on the row');
+      await shot(page, 'no-download-icon');
+      return null;
+    }
+    await icon.click({ timeout: 12000 });
+    log('   → clicked the download icon');
+
+    // The modal may render inline or in an iframe. Look in both.
+    const findButton = async () => {
+      const inPage = page.getByRole('button', { name: /^download$/i })
+        .or(page.locator('a:has-text("Download"), input[type="submit"][value="Download" i]')).first();
+      if (await inPage.count().catch(() => 0)) return inPage;
+      for (const f of page.frames()) {
+        const inFrame = f.getByRole('button', { name: /^download$/i })
+          .or(f.locator('a:has-text("Download"), input[type="submit"][value="Download" i]')).first();
+        if (await inFrame.count().catch(() => 0)) return inFrame;
+      }
+      return null;
+    };
+
+    let btn = null;
+    for (let i = 0; i < 12 && !btn; i++) {
+      btn = await findButton();
+      if (!btn) await page.waitForTimeout(1000);
+    }
+    if (!btn) {
+      log('   ⚠ download modal never showed a Download button');
+      await shot(page, 'no-modal-button');
+      return null;
+    }
+
+    // Clicking it kicks off server-side zip building ("Working on it..") and the
+    // file can take a while for big packages.
+    const waitDl = page.waitForEvent('download', { timeout: 300000 });
+    await btn.click({ timeout: 15000 });
+    log('   → clicked Download, waiting for the package to build…');
+
+    const download = await waitDl.catch(() => null);
     if (!download) {
-      log('   ⚠ clicked, but no file came back');
-      await shot(page, 'no-file-after-click');
+      log('   ⚠ no file arrived');
+      await shot(page, 'no-file-after-download');
       return null;
     }
 
     const suggested = download.suggestedFilename() || `pack-${Date.now()}.zip`;
-    const safe = `${job.ref || job.rowId || job.title}`.slice(0, 80).replace(/[\\/:*?"<>|]/g, '_');
+    const safe = `${job.ref || vpRef || job.rowId || job.title}`.slice(0, 80).replace(/[\\/:*?"<>|]/g, '_');
     const dest = path.join(DOWNLOADS, `${safe}_${suggested}`);
     await download.saveAs(dest);
     log(`   ⬇ downloaded ${suggested}`);
