@@ -118,57 +118,80 @@ export default async function ({ page, context }) {
     { waitUntil: 'networkidle2' });
   note('tender list loaded');
 
-  // Filter down to this tender so the row is unambiguous.
-  const searchSel = await page.evaluate(() => {
-    const el = [...document.querySelectorAll('input[type=text], input:not([type])')]
-      .find((i) => /search/i.test(i.id + ' ' + i.name + ' ' + (i.placeholder || '')));
-    return el ? (el.id ? '#' + el.id : null) : null;
-  });
-  if (searchSel) {
-    await page.type(searchSel, VP_REF, { delay: 20 });
-    await page.keyboard.press('Enter');
-    await page.waitForNetworkIdle({ idleTime: 1200, timeout: 30000 }).catch(() => null);
-    note('filtered by ' + VP_REF);
-  }
+  // Don't use the search box — it filters on title text, not the VP reference,
+  // so searching "517599" empties the list. The page shows all open tenders at
+  // once, so scan it directly.
+  await page.waitForNetworkIdle({ idleTime: 1500, timeout: 30000 }).catch(() => null);
 
   // ---- locate the row, follow it, click the download icon -----------------
   // Downloads are disabled on tenders that are not Followed, so follow first.
   const clicked = await page.evaluate((ref, title) => {
-    const rows = [...document.querySelectorAll('tr, div, li')].filter((el) => {
-      const t = el.innerText || '';
-      return (t.includes('VP' + ref) || t.includes(ref) || (title && t.includes(title.slice(0, 40))))
-        && el.querySelectorAll('a, img, i, span').length > 2
-        && (el.innerText || '').length < 2000;
-    });
-    if (!rows.length) return { found: false, reason: 'no row matched' };
-
-    // innermost matching row
-    const row = rows[rows.length - 1];
-
-    // follow if it currently offers to
-    const follow = [...row.querySelectorAll('a, span, div, label')]
-      .find((e) => /^\s*follow\s*$/i.test(e.innerText || ''));
-    if (follow) { follow.click(); }
-
-    const icon = [...row.querySelectorAll('a, img, i, span, button')].find((e) => {
+    const isIcon = (e) => {
       const s = (e.getAttribute('title') || '') + ' ' + (e.getAttribute('alt') || '') +
                 ' ' + (e.getAttribute('aria-label') || '') + ' ' + (e.className || '') +
-                ' ' + (e.getAttribute('src') || '') + ' ' + (e.getAttribute('href') || '');
-      return /download/i.test(s);
-    });
-    if (!icon) {
-      return { found: false, followed: Boolean(follow), reason: 'row found but no download icon',
-               sample: row.innerHTML.slice(0, 800) };
+                ' ' + (e.getAttribute('src') || '') + ' ' + (e.getAttribute('href') || '') +
+                ' ' + (e.getAttribute('onclick') || '');
+      return /download|package/i.test(s);
+    };
+
+    const bodyText = document.body.innerText || '';
+    const needles = ['VP' + ref, ref, title.slice(0, 40)].filter(Boolean);
+    const present = needles.filter((n) => bodyText.includes(n));
+
+    // Find the deepest element that names this tender, then walk up until an
+    // ancestor also contains a download control — that ancestor is the row.
+    let anchor = null;
+    const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_ELEMENT);
+    while (walker.nextNode()) {
+      const el = walker.currentNode;
+      if (el.children.length) continue;                 // leaf nodes only
+      const t = (el.textContent || '').trim();
+      if (!t) continue;
+      if (t.includes('VP' + ref) || t === ref || (title && t.includes(title.slice(0, 40)))) {
+        anchor = el;
+        break;
+      }
     }
+
+    if (!anchor) {
+      return { found: false, reason: 'tender not present on the list page',
+               needlesPresent: present, bodySample: bodyText.slice(0, 600),
+               listLength: bodyText.length };
+    }
+
+    let row = anchor;
+    let icon = null;
+    for (let up = 0; up < 12 && row; up++) {
+      icon = [...row.querySelectorAll('a, img, i, span, button, input')].find(isIcon);
+      if (icon) break;
+      row = row.parentElement;
+    }
+
+    if (!icon || !row) {
+      return { found: false, reason: 'found the tender but no download control near it',
+               needlesPresent: present,
+               sample: (anchor.closest('tr') || anchor.parentElement || anchor).innerHTML.slice(0, 1200) };
+    }
+
+    // follow first if the row currently offers to
+    const follow = [...row.querySelectorAll('a, span, div, label, input')]
+      .find((e) => /^\s*follow\s*$/i.test((e.innerText || e.value || '').trim()));
+    if (follow) follow.click();
+
     icon.click();
-    return { found: true, followed: Boolean(follow) };
+    return { found: true, followed: Boolean(follow),
+             iconHtml: icon.outerHTML.slice(0, 200) };
   }, VP_REF, TITLE);
 
   if (!clicked.found) {
     throw new Error('Could not start the download: ' + clicked.reason +
-                    (clicked.sample ? ' || ' + clicked.sample : ''));
+      ' || needlesPresent=' + JSON.stringify(clicked.needlesPresent || []) +
+      ' || listLength=' + (clicked.listLength ?? '?') +
+      (clicked.sample ? ' || ROW=' + clicked.sample : '') +
+      (clicked.bodySample ? ' || BODY=' + clicked.bodySample : ''));
   }
-  note('clicked the download icon' + (clicked.followed ? ' (followed first)' : ''));
+  note('clicked the download icon ' + (clicked.iconHtml || '') +
+       (clicked.followed ? ' (followed first)' : ''));
 
   // ---- the modal, which may be inline or in an iframe ---------------------
   const pressDownload = async () => {
