@@ -289,7 +289,7 @@
           },
           "redirect": {
             "redirect": {
-              "followRedirects": true
+              "followRedirects": false
             }
           },
           "timeout": 45000
@@ -314,14 +314,122 @@
     },
     {
       "parameters": {
-        "jsCode": "\n// --- tiny helpers -----------------------------------------------------------\n// Merge Set-Cookie headers into a cookie jar we carry by hand. n8n's HTTP node\n// has no cookie jar of its own, so we do this explicitly at every hop.\nfunction mergeCookies(jar, setCookie) {\n  const out = { ...(jar || {}) };\n  const list = Array.isArray(setCookie) ? setCookie : (setCookie ? [setCookie] : []);\n  for (const raw of list) {\n    const first = String(raw).split(';')[0];\n    const eq = first.indexOf('=');\n    if (eq < 1) continue;\n    const name = first.slice(0, eq).trim();\n    const val = first.slice(eq + 1).trim();\n    if (!name) continue;\n    if (val === '' || /expires=Thu, 01 Jan 1970/i.test(raw)) delete out[name];\n    else out[name] = val;\n  }\n  return out;\n}\nconst jarToHeader = (jar) => Object.entries(jar || {}).map(([k, v]) => k + '=' + v).join('; ');\n\n// Pull a hidden input's value out of raw HTML.\nfunction hidden(html, name) {\n  const re = new RegExp('<input[^>]*name=\"' + name + '\"[^>]*>', 'i');\n  const tag = (html || '').match(re);\n  if (!tag) return '';\n  const v = tag[0].match(/value=\"([^\"]*)\"/i);\n  return v ? v[1].replace(/&amp;/g, '&').replace(/&quot;/g, '\"').replace(/&#39;/g, \"'\") : '';\n}\n\nconst prev = $('Parse Password Form').first().json;\nconst res  = $json;\nconst html = String(res.body || '');\nconst jar  = mergeCookies(prev.jar, res.headers?.['set-cookie']);\n\n// Signed in when we hold an identity/session cookie and are no longer being\n// shown a password box.\nconst names = Object.keys(jar);\n\n// Be strict about what counts as \"signed in\". Antiforgery, load-balancer\n// affinity and RememberMe cookies all appear BEFORE authentication succeeds \u2014\n// counting them was giving a false pass and sending us to the tender page\n// logged out.\nconst AUTH_COOKIE = /^(idsrv|\\.AspNetCore\\.Identity\\.Application|\\.AspNetCore\\.Cookies|ASP\\.NET_SessionId|\\.ASPXAUTH|vp\\.session)/i;\nconst NOT_AUTH    = /antiforgery|arraffinity|rememberme|__requestverification|consent/i;\nconst authCookies = names.filter(n => AUTH_COOKIE.test(n) && !NOT_AUTH.test(n));\nconst hasAuth = authCookies.length > 0;\nconst stillAsking = /type=\"password\"/i.test(html);\nconst badCreds = /invalid|incorrect|not recognised|not recognized/i.test(html) && stillAsking;\n\nconst ok = hasAuth && !stillAsking;\n\nreturn [{ json: {\n  tenders: prev.tenders,\n  jar,\n  cookieHeader: jarToHeader(jar),\n  ok,\n  cookieNames: names,\n  authCookies,\n  reason: ok ? '' : (badCreds ? 'credentials rejected'\n        : stillAsking ? 'still on the password step (MFA, or a field the form now wants)'\n        : 'no session cookie came back'),\n  snippet: html.replace(/<script[\\s\\S]*?<\\/script>/gi, '').slice(0, 600),\n} }];"
+        "jsCode": "\n// --- tiny helpers -----------------------------------------------------------\n// Merge Set-Cookie headers into a cookie jar we carry by hand. n8n's HTTP node\n// has no cookie jar of its own, so we do this explicitly at every hop.\nfunction mergeCookies(jar, setCookie) {\n  const out = { ...(jar || {}) };\n  const list = Array.isArray(setCookie) ? setCookie : (setCookie ? [setCookie] : []);\n  for (const raw of list) {\n    const first = String(raw).split(';')[0];\n    const eq = first.indexOf('=');\n    if (eq < 1) continue;\n    const name = first.slice(0, eq).trim();\n    const val = first.slice(eq + 1).trim();\n    if (!name) continue;\n    if (val === '' || /expires=Thu, 01 Jan 1970/i.test(raw)) delete out[name];\n    else out[name] = val;\n  }\n  return out;\n}\nconst jarToHeader = (jar) => Object.entries(jar || {}).map(([k, v]) => k + '=' + v).join('; ');\n\n// Pull a hidden input's value out of raw HTML.\nfunction hidden(html, name) {\n  const re = new RegExp('<input[^>]*name=\"' + name + '\"[^>]*>', 'i');\n  const tag = (html || '').match(re);\n  if (!tag) return '';\n  const v = tag[0].match(/value=\"([^\"]*)\"/i);\n  return v ? v[1].replace(/&amp;/g, '&').replace(/&quot;/g, '\"').replace(/&#39;/g, \"'\") : '';\n}\n\n// One hop of the OIDC redirect chain. n8n follows redirects itself but reports\n// only the final response's headers, so the auth cookie set on an intermediate\n// 302 is lost. We follow the chain by hand, keeping every cookie.\nconst prev = $('Parse Password Form').first().json;\nconst res  = $json;\nconst jar  = mergeCookies(prev.jar, res.headers?.['set-cookie']);\n\nconst loc = res.headers?.location || res.headers?.Location || '';\nconst absolute = (u) => {\n  if (!u) return '';\n  if (/^https?:\\/\\//i.test(u)) return u;\n  if (u.startsWith('/')) return 'https://login.vendorpanel.com.au' + u;\n  return 'https://login.vendorpanel.com.au/' + u;\n};\n\n// When there's nothing left to follow, load the site root \u2014 harmless, and it\n// is where the final session cookie gets issued anyway.\nconst nextUrl = absolute(loc) || 'https://www.vendorpanel.com.au/';\n\nreturn [{ json: {\n  tenders: prev.tenders,\n  jar,\n  cookieHeader: jarToHeader(jar),\n  nextUrl,\n  hadLocation: Boolean(loc),\n  status: res.statusCode,\n} }];"
+      },
+      "id": "b-hopA",
+      "name": "Merge Cookies A",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1850,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "url": "={{ $json.nextUrl }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "User-Agent",
+              "value": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36"
+            },
+            {
+              "name": "Cookie",
+              "value": "={{ $json.cookieHeader }}"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "fullResponse": true,
+              "neverError": true
+            }
+          },
+          "redirect": {
+            "redirect": {
+              "followRedirects": false
+            }
+          },
+          "timeout": 45000
+        }
+      },
+      "id": "b-follow1",
+      "name": "Follow Redirect 1",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2080,
+        300
+      ],
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "\n// --- tiny helpers -----------------------------------------------------------\n// Merge Set-Cookie headers into a cookie jar we carry by hand. n8n's HTTP node\n// has no cookie jar of its own, so we do this explicitly at every hop.\nfunction mergeCookies(jar, setCookie) {\n  const out = { ...(jar || {}) };\n  const list = Array.isArray(setCookie) ? setCookie : (setCookie ? [setCookie] : []);\n  for (const raw of list) {\n    const first = String(raw).split(';')[0];\n    const eq = first.indexOf('=');\n    if (eq < 1) continue;\n    const name = first.slice(0, eq).trim();\n    const val = first.slice(eq + 1).trim();\n    if (!name) continue;\n    if (val === '' || /expires=Thu, 01 Jan 1970/i.test(raw)) delete out[name];\n    else out[name] = val;\n  }\n  return out;\n}\nconst jarToHeader = (jar) => Object.entries(jar || {}).map(([k, v]) => k + '=' + v).join('; ');\n\n// Pull a hidden input's value out of raw HTML.\nfunction hidden(html, name) {\n  const re = new RegExp('<input[^>]*name=\"' + name + '\"[^>]*>', 'i');\n  const tag = (html || '').match(re);\n  if (!tag) return '';\n  const v = tag[0].match(/value=\"([^\"]*)\"/i);\n  return v ? v[1].replace(/&amp;/g, '&').replace(/&quot;/g, '\"').replace(/&#39;/g, \"'\") : '';\n}\n\n// One hop of the OIDC redirect chain. n8n follows redirects itself but reports\n// only the final response's headers, so the auth cookie set on an intermediate\n// 302 is lost. We follow the chain by hand, keeping every cookie.\nconst prev = $('Merge Cookies A').first().json;\nconst res  = $json;\nconst jar  = mergeCookies(prev.jar, res.headers?.['set-cookie']);\n\nconst loc = res.headers?.location || res.headers?.Location || '';\nconst absolute = (u) => {\n  if (!u) return '';\n  if (/^https?:\\/\\//i.test(u)) return u;\n  if (u.startsWith('/')) return 'https://www.vendorpanel.com.au' + u;\n  return 'https://www.vendorpanel.com.au/' + u;\n};\n\n// When there's nothing left to follow, load the site root \u2014 harmless, and it\n// is where the final session cookie gets issued anyway.\nconst nextUrl = absolute(loc) || 'https://www.vendorpanel.com.au/';\n\nreturn [{ json: {\n  tenders: prev.tenders,\n  jar,\n  cookieHeader: jarToHeader(jar),\n  nextUrl,\n  hadLocation: Boolean(loc),\n  status: res.statusCode,\n} }];"
+      },
+      "id": "b-hopB",
+      "name": "Merge Cookies B",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2310,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "url": "={{ $json.nextUrl }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "User-Agent",
+              "value": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36"
+            },
+            {
+              "name": "Cookie",
+              "value": "={{ $json.cookieHeader }}"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "fullResponse": true,
+              "neverError": true
+            }
+          },
+          "redirect": {
+            "redirect": {
+              "followRedirects": false
+            }
+          },
+          "timeout": 45000
+        }
+      },
+      "id": "b-follow2",
+      "name": "Follow Redirect 2",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2540,
+        300
+      ],
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "\n// --- tiny helpers -----------------------------------------------------------\n// Merge Set-Cookie headers into a cookie jar we carry by hand. n8n's HTTP node\n// has no cookie jar of its own, so we do this explicitly at every hop.\nfunction mergeCookies(jar, setCookie) {\n  const out = { ...(jar || {}) };\n  const list = Array.isArray(setCookie) ? setCookie : (setCookie ? [setCookie] : []);\n  for (const raw of list) {\n    const first = String(raw).split(';')[0];\n    const eq = first.indexOf('=');\n    if (eq < 1) continue;\n    const name = first.slice(0, eq).trim();\n    const val = first.slice(eq + 1).trim();\n    if (!name) continue;\n    if (val === '' || /expires=Thu, 01 Jan 1970/i.test(raw)) delete out[name];\n    else out[name] = val;\n  }\n  return out;\n}\nconst jarToHeader = (jar) => Object.entries(jar || {}).map(([k, v]) => k + '=' + v).join('; ');\n\n// Pull a hidden input's value out of raw HTML.\nfunction hidden(html, name) {\n  const re = new RegExp('<input[^>]*name=\"' + name + '\"[^>]*>', 'i');\n  const tag = (html || '').match(re);\n  if (!tag) return '';\n  const v = tag[0].match(/value=\"([^\"]*)\"/i);\n  return v ? v[1].replace(/&amp;/g, '&').replace(/&quot;/g, '\"').replace(/&#39;/g, \"'\") : '';\n}\n\nconst prev = $('Merge Cookies B').first().json;\nconst res  = $json;\nconst html = String(res.body || '');\nconst jar  = mergeCookies(prev.jar, res.headers?.['set-cookie']);\n\n// Signed in when we hold an identity/session cookie and are no longer being\n// shown a password box.\nconst names = Object.keys(jar);\n\n// Be strict about what counts as \"signed in\". Antiforgery, load-balancer\n// affinity and RememberMe cookies all appear BEFORE authentication succeeds \u2014\n// counting them was giving a false pass and sending us to the tender page\n// logged out.\nconst AUTH_COOKIE = /^(idsrv|\\.AspNetCore\\.Identity\\.Application|\\.AspNetCore\\.Cookies|ASP\\.NET_SessionId|\\.ASPXAUTH|vp\\.session)/i;\nconst NOT_AUTH    = /antiforgery|arraffinity|rememberme|__requestverification|consent/i;\nconst authCookies = names.filter(n => AUTH_COOKIE.test(n) && !NOT_AUTH.test(n));\nconst hasAuth = authCookies.length > 0;\nconst stillAsking = /type=\"password\"/i.test(html);\nconst badCreds = /invalid|incorrect|not recognised|not recognized/i.test(html) && stillAsking;\n\nconst ok = hasAuth && !stillAsking;\n\nreturn [{ json: {\n  tenders: prev.tenders,\n  jar,\n  cookieHeader: jarToHeader(jar),\n  ok,\n  cookieNames: names,\n  authCookies,\n  reason: ok ? '' : (badCreds ? 'credentials rejected'\n        : stillAsking ? 'still on the password step (MFA, or a field the form now wants)'\n        : 'no session cookie came back'),\n  snippet: html.replace(/<script[\\s\\S]*?<\\/script>/gi, '').slice(0, 600),\n} }];"
       },
       "id": "b-session",
       "name": "Confirm Session",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        1850,
+        2770,
         300
       ]
     },
@@ -353,7 +461,7 @@
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.2,
       "position": [
-        2080,
+        3000,
         300
       ]
     },
@@ -366,7 +474,7 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        2310,
+        3230,
         300
       ]
     },
@@ -406,7 +514,7 @@
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
-        2540,
+        3460,
         300
       ]
     },
@@ -419,7 +527,7 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        2770,
+        3690,
         300
       ]
     },
@@ -451,7 +559,7 @@
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.2,
       "position": [
-        3000,
+        3920,
         300
       ]
     },
@@ -486,7 +594,7 @@
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
-        3230,
+        4150,
         300
       ],
       "onError": "continueRegularOutput"
@@ -500,7 +608,7 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        3460,
+        4380,
         300
       ]
     },
@@ -526,7 +634,7 @@
       "type": "n8n-nodes-base.googleDrive",
       "typeVersion": 3,
       "position": [
-        3690,
+        4610,
         300
       ],
       "credentials": {
@@ -545,7 +653,7 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        3920,
+        4840,
         300
       ]
     },
@@ -579,7 +687,7 @@
       "type": "n8n-nodes-base.googleSheets",
       "typeVersion": 4.5,
       "position": [
-        4150,
+        5070,
         300
       ],
       "credentials": {
@@ -605,7 +713,7 @@
       "type": "n8n-nodes-base.slack",
       "typeVersion": 2.2,
       "position": [
-        4380,
+        5300,
         500
       ],
       "credentials": {
@@ -739,6 +847,50 @@
       ]
     },
     "POST Password": {
+      "main": [
+        [
+          {
+            "node": "Merge Cookies A",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge Cookies A": {
+      "main": [
+        [
+          {
+            "node": "Follow Redirect 1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Follow Redirect 1": {
+      "main": [
+        [
+          {
+            "node": "Merge Cookies B",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge Cookies B": {
+      "main": [
+        [
+          {
+            "node": "Follow Redirect 2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Follow Redirect 2": {
       "main": [
         [
           {

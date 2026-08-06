@@ -281,7 +281,7 @@ nodes.push({
     },
     options: {
       response: { response: { fullResponse: true, neverError: true } },
-      redirect: { redirect: { followRedirects: true } },
+      redirect: { redirect: { followRedirects: false } },
       timeout: 45000,
     },
   },
@@ -289,11 +289,116 @@ nodes.push({
   type: 'n8n-nodes-base.httpRequest', typeVersion: 4.2, position: at(),
 });
 
+
+nodes.push({
+  parameters: { jsCode: `${HELPERS}
+// One hop of the OIDC redirect chain. n8n follows redirects itself but reports
+// only the final response's headers, so the auth cookie set on an intermediate
+// 302 is lost. We follow the chain by hand, keeping every cookie.
+const prev = $('Parse Password Form').first().json;
+const res  = $json;
+const jar  = mergeCookies(prev.jar, res.headers?.['set-cookie']);
+
+const loc = res.headers?.location || res.headers?.Location || '';
+const absolute = (u) => {
+  if (!u) return '';
+  if (/^https?:\\/\\//i.test(u)) return u;
+  if (u.startsWith('/')) return 'https://login.vendorpanel.com.au' + u;
+  return 'https://login.vendorpanel.com.au/' + u;
+};
+
+// When there's nothing left to follow, load the site root — harmless, and it
+// is where the final session cookie gets issued anyway.
+const nextUrl = absolute(loc) || 'https://www.vendorpanel.com.au/';
+
+return [{ json: {
+  tenders: prev.tenders,
+  jar,
+  cookieHeader: jarToHeader(jar),
+  nextUrl,
+  hadLocation: Boolean(loc),
+  status: res.statusCode,
+} }];` },
+  id: 'b-hopA', name: 'Merge Cookies A',
+  type: 'n8n-nodes-base.code', typeVersion: 2, position: at(0),
+});
+
+nodes.push({
+  parameters: {
+    url: '={{ $json.nextUrl }}',
+    sendHeaders: true,
+    headerParameters: { parameters: [
+      { name: 'User-Agent', value: UA },
+      { name: 'Cookie', value: '={{ $json.cookieHeader }}' },
+    ] },
+    options: {
+      response: { response: { fullResponse: true, neverError: true } },
+      redirect: { redirect: { followRedirects: false } },
+      timeout: 45000,
+    },
+  },
+  id: 'b-follow1', name: 'Follow Redirect 1',
+  type: 'n8n-nodes-base.httpRequest', typeVersion: 4.2, position: at(0),
+  onError: 'continueRegularOutput',
+});
+
+nodes.push({
+  parameters: { jsCode: `${HELPERS}
+// One hop of the OIDC redirect chain. n8n follows redirects itself but reports
+// only the final response's headers, so the auth cookie set on an intermediate
+// 302 is lost. We follow the chain by hand, keeping every cookie.
+const prev = $('Merge Cookies A').first().json;
+const res  = $json;
+const jar  = mergeCookies(prev.jar, res.headers?.['set-cookie']);
+
+const loc = res.headers?.location || res.headers?.Location || '';
+const absolute = (u) => {
+  if (!u) return '';
+  if (/^https?:\\/\\//i.test(u)) return u;
+  if (u.startsWith('/')) return 'https://www.vendorpanel.com.au' + u;
+  return 'https://www.vendorpanel.com.au/' + u;
+};
+
+// When there's nothing left to follow, load the site root — harmless, and it
+// is where the final session cookie gets issued anyway.
+const nextUrl = absolute(loc) || 'https://www.vendorpanel.com.au/';
+
+return [{ json: {
+  tenders: prev.tenders,
+  jar,
+  cookieHeader: jarToHeader(jar),
+  nextUrl,
+  hadLocation: Boolean(loc),
+  status: res.statusCode,
+} }];` },
+  id: 'b-hopB', name: 'Merge Cookies B',
+  type: 'n8n-nodes-base.code', typeVersion: 2, position: at(0),
+});
+
+nodes.push({
+  parameters: {
+    url: '={{ $json.nextUrl }}',
+    sendHeaders: true,
+    headerParameters: { parameters: [
+      { name: 'User-Agent', value: UA },
+      { name: 'Cookie', value: '={{ $json.cookieHeader }}' },
+    ] },
+    options: {
+      response: { response: { fullResponse: true, neverError: true } },
+      redirect: { redirect: { followRedirects: false } },
+      timeout: 45000,
+    },
+  },
+  id: 'b-follow2', name: 'Follow Redirect 2',
+  type: 'n8n-nodes-base.httpRequest', typeVersion: 4.2, position: at(0),
+  onError: 'continueRegularOutput',
+});
+
 // ────────────────────────────────────────────────────────── 9 confirm session
 nodes.push({
   parameters: {
     jsCode: `${HELPERS}
-const prev = $('Parse Password Form').first().json;
+const prev = $('Merge Cookies B').first().json;
 const res  = $json;
 const html = String(res.body || '');
 const jar  = mergeCookies(prev.jar, res.headers?.['set-cookie']);
@@ -622,7 +727,11 @@ link('GET Login Page', 'Parse Login Form');
 link('Parse Login Form', 'POST Username');
 link('POST Username', 'Parse Password Form');
 link('Parse Password Form', 'POST Password');
-link('POST Password', 'Confirm Session');
+link('POST Password', 'Merge Cookies A');
+link('Merge Cookies A', 'Follow Redirect 1');
+link('Follow Redirect 1', 'Merge Cookies B');
+link('Merge Cookies B', 'Follow Redirect 2');
+link('Follow Redirect 2', 'Confirm Session');
 link('Confirm Session', 'Logged In?');
 link('Logged In?', 'One Item Per Tender', 0);
 link('Logged In?', 'Slack - Login Failed', 1);
