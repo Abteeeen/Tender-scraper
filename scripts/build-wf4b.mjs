@@ -112,8 +112,12 @@ nodes.push({
 nodes.push({
   parameters: {
     jsCode: `${HELPERS}
-const res  = $json;
-const html = String(res.body || '');
+const res = $json;
+const raw = res.body ?? res.data ?? '';
+const html = typeof raw === 'string' ? raw
+           : (raw && raw.type === 'Buffer' && Array.isArray(raw.data))
+             ? Buffer.from(raw.data).toString('utf8')
+             : (raw ? JSON.stringify(raw) : '');
 const jar  = mergeCookies({}, res.headers?.['set-cookie']);
 
 const form = {
@@ -131,7 +135,21 @@ const form = {
 };
 
 if (!form.__RequestVerificationToken) {
-  throw new Error('No __RequestVerificationToken on the login page — the form has changed.');
+  // Say what actually came back, so one failed run is enough to diagnose it.
+  const ct  = res.headers?.['content-type'] || '(no content-type)';
+  const len = html.length;
+  const hasForm = /id="loginForm"/i.test(html);
+  const anyToken = /__RequestVerificationToken/i.test(html);
+  throw new Error(
+    'No __RequestVerificationToken found. ' +
+    'status=' + (res.statusCode ?? '?') +
+    ' contentType=' + ct +
+    ' bodyLength=' + len +
+    ' loginFormPresent=' + hasForm +
+    ' tokenStringAnywhere=' + anyToken +
+    ' bodyType=' + (typeof res.body) +
+    ' || first300=' + JSON.stringify(String(html).slice(0, 300))
+  );
 }
 
 return [{ json: {
