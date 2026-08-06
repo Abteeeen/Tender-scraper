@@ -473,144 +473,132 @@ nodes.push({
   parameters: {
     jsCode: `// One item per tender, each carrying the session cookie.
 //
-// The Link stored in the sheet is the PUBLIC url (tsi.axd), which redirects to
-// PublicTenderAccess.aspx — a "Request Access" form with no documents on it.
-// The members' entry point is /fpt.axd?g=<guid>, and that guid is simply the
-// RowID with dashes put back in. Use it when we can derive it.
+// The download endpoint keys off VendorPanel's opportunityId, which is already
+// embedded in the Link the sheet stores:
+//   tsi.axd?id=<guid32>s<opportunityId>s<hash>s<n>
+// e.g. ...0195s517599s1be3... -> 517599, matching "VP517599" in the UI.
 const s = $json;
 
-const toGuid = (id) => {
-  const h = String(id || '').replace(/-/g, '').toLowerCase();
-  if (!/^[0-9a-f]{32}$/.test(h)) return '';
-  return h.slice(0, 8) + '-' + h.slice(8, 12) + '-' + h.slice(12, 16) + '-' +
-         h.slice(16, 20) + '-' + h.slice(20);
+const opportunityIdOf = (t) => {
+  // 1. straight out of the link
+  const m = String(t.link || '').match(/[?&]id=[0-9a-f]{32}s(\\d+)s/i);
+  if (m) return m[1];
+  // 2. or from a reference like VP517599
+  const r = String(t.ref || '').match(/VP\\s*(\\d{4,})/i);
+  if (r) return r[1];
+  return '';
 };
 
 return (s.tenders || []).map((t) => {
-  const guid = toGuid(t.rowId);
-  const memberUrl = guid
-    ? 'https://www.vendorpanel.com.au/fpt.axd?g=' + guid
-    : t.link;
-  return { json: { ...t, cookieHeader: s.cookieHeader, memberUrl, guid, publicUrl: t.link } };
+  const opportunityId = opportunityIdOf(t);
+  return { json: {
+    ...t,
+    cookieHeader: s.cookieHeader,
+    opportunityId,
+    modalUrl: opportunityId
+      ? 'https://www.vendorpanel.com.au/VendorDownloadOpportunityPackage.aspx?opportunityId=' + opportunityId
+      : '',
+  } };
 });`,
   },
   id: 'b-fan', name: 'One Item Per Tender',
   type: 'n8n-nodes-base.code', typeVersion: 2, position: at(),
 });
 
-// ────────────────────────────────────────────────────────── 12 GET tender
+// ────────────────────────────────────────────────────────── 12 modal
 nodes.push({
   parameters: {
-    url: '={{ $json.memberUrl }}',
+    url: '={{ $json.modalUrl }}',
     sendHeaders: true,
-    headerParameters: {
-      parameters: [
-        { name: 'User-Agent', value: UA },
-        { name: 'Cookie', value: '={{ $json.cookieHeader }}' },
-      ],
-    },
+    headerParameters: { parameters: [
+      { name: 'User-Agent', value: UA },
+      { name: 'Cookie', value: '={{ $json.cookieHeader }}' },
+    ] },
     options: {
       response: { response: { fullResponse: true, neverError: true } },
       redirect: { redirect: { followRedirects: true } },
       timeout: 60000,
     },
   },
-  id: 'b-tender', name: 'GET Tender Page',
+  id: 'b-modal', name: 'GET Download Modal',
   type: 'n8n-nodes-base.httpRequest', typeVersion: 4.2, position: at(),
+  onError: 'continueRegularOutput',
 });
 
-// ────────────────────────────────────────────────────────── 13 find pack
+// ────────────────────────────────────────────────────────── 13 postback
 nodes.push({
   parameters: {
     jsCode: `${HELPERS}
-// Find the pack's download URL in the tender page HTML.
+// The modal is a WebForms page. Clicking "Download" posts the whole form back.
+// Rather than hard-code __VIEWSTATE / control names (which change between
+// releases), read every field off the page and post them all back verbatim.
 const out = [];
+const jobs = $('One Item Per Tender').all();
 const items = $input.all();
 
 for (let i = 0; i < items.length; i++) {
-  const res  = items[i].json;
-  const job  = $('One Item Per Tender').all()[i].json;
+  const job = jobs[i]?.json || {};
+  const res = items[i].json;
   const html = bodyOf(res);
 
-  const absolute = (u) => {
-    if (!u) return '';
-    if (/^https?:\\/\\//i.test(u)) return u;
-    if (u.startsWith('//')) return 'https:' + u;
-    if (u.startsWith('/')) return 'https://www.vendorpanel.com.au' + u;
-    return 'https://www.vendorpanel.com.au/' + u;
-  };
-
-  // every anchor on the page, with its href and its inner text
-  const anchors = [...html.matchAll(/<a\\b([^>]*)>([\\s\\S]*?)<\\/a>/gi)].map((m) => {
-    const attrs = m[1] || '';
-    const href  = (attrs.match(/href="([^"]*)"/i) || [])[1] || '';
-    const text  = (m[2] || '').replace(/<[^>]+>/g, ' ').replace(/\\s+/g, ' ').trim();
-    return { href, text, attrs };
-  });
-
-  let hit = null;
-  let how = '';
-
-  // 1. a direct link to a document file
-  hit = anchors.find((a) => /\\.(zip|pdf|docx?|xlsx?)(\\?|$)/i.test(a.href));
-  if (hit) how = 'direct file link';
-
-  // 2. a link whose URL looks like a download handler
-  if (!hit) {
-    hit = anchors.find((a) => /download|getfile|attachment|document/i.test(a.href));
-    if (hit) how = 'download handler URL';
+  if (!job.opportunityId) {
+    out.push({ json: { ...job, ok: false, reason: 'could not work out the opportunityId from the Link' } });
+    continue;
   }
 
-  // 3. a link whose tooltip or visible text says download
-  if (!hit) {
-    hit = anchors.find((a) =>
-      /download/i.test(a.attrs) || /^\\s*download/i.test(a.text));
-    if (hit) how = 'link labelled download';
+  const fields = {};
+  for (const m of html.matchAll(/<input\\b([^>]*)>/gi)) {
+    const a = m[1];
+    const name = (a.match(/name="([^"]*)"/i) || [])[1];
+    if (!name) continue;
+    const type = ((a.match(/type="([^"]*)"/i) || [])[1] || 'text').toLowerCase();
+    const value = (a.match(/value="([^"]*)"/i) || [])[1] || '';
+    const decode = (x) => x.replace(/&amp;/g, '&').replace(/&quot;/g, '"')
+                           .replace(/&#39;/g, "'").replace(/&lt;/g, '<').replace(/&gt;/g, '>')
+                           .replace(/&#32;/g, ' ');
+    if (type === 'checkbox' || type === 'radio') {
+      if (/\\bchecked\\b/i.test(a)) fields[name] = decode(value);
+    } else if (type === 'submit' || type === 'button' || type === 'image') {
+      // only the Download button should be submitted, not Cancel/Close
+      if (/download/i.test(value) || /download/i.test(name)) fields[name] = decode(value);
+    } else {
+      fields[name] = decode(value);
+    }
   }
 
-  if (hit && hit.href) {
-    out.push({ json: { ...job, ok: true, how, downloadUrl: absolute(hit.href) } });
-  } else {
-    // Hand back a few candidate anchors so the selector can be fixed in one pass
-    // instead of guessing blind.
-    const hint = anchors
-      .filter((a) => /doc|file|attach|pack|down/i.test(a.href + ' ' + a.text))
-      .slice(0, 6)
-      .map((a) => a.text.slice(0, 40) + ' -> ' + a.href.slice(0, 120));
+  const hasState = Boolean(fields.__VIEWSTATE || fields.__EVENTVALIDATION);
+  const clicked = Object.keys(fields).filter((k) => /download/i.test(k) || /download/i.test(fields[k]));
 
-    const needsAccess = /Request\\s*Access|PublicTenderAccess/i.test(html);
-    const loggedOut = /type="password"|Account\\/Login|fpt\\.axd/i.test(html) && !needsAccess;
-
-    out.push({ json: {
-      ...job, ok: false,
-      reason: needsAccess
-        ? 'this tender requires "Request Access" — the buyer must grant it before documents appear'
-        : loggedOut
-          ? 'session was not accepted on the tender page'
-          : 'no download link found in the page',
-      needsAccess,
-      candidates: hint,
-      anchorCount: anchors.length,
+  if (!hasState) {
+    out.push({ json: { ...job, ok: false,
+      reason: 'the download modal did not come back as a form',
+      httpStatus: res.statusCode,
       htmlLength: html.length,
       pageTitle: (html.match(/<title>([\\s\\S]*?)<\\/title>/i) || [])[1]?.replace(/\\s+/g, ' ').trim() || '',
-      allAnchors: anchors.slice(0, 25).map((a) => (a.text || '(no text)').slice(0, 35) + ' -> ' + a.href.slice(0, 110)),
-      httpStatus: res.statusCode,
+      fieldNames: Object.keys(fields).slice(0, 30),
     } });
+    continue;
   }
+
+  const rawBody = Object.entries(fields)
+    .map(([k, v]) => encodeURIComponent(k) + '=' + encodeURIComponent(v))
+    .join('&');
+
+  out.push({ json: { ...job, ok: true, rawBody, fieldCount: Object.keys(fields).length, clicked } });
 }
 return out;`,
   },
-  id: 'b-find', name: 'Find Pack URL',
+  id: 'b-postback', name: 'Build Postback',
   type: 'n8n-nodes-base.code', typeVersion: 2, position: at(),
 });
 
-// ────────────────────────────────────────────────────────── 14 gate 2
+// ────────────────────────────────────────────────────────── 14 gate
 nodes.push({
   parameters: {
     conditions: {
       options: { caseSensitive: true, version: 2 },
       conditions: [{
-        id: 'found',
+        id: 'ready',
         operator: { type: 'boolean', operation: 'true', singleValue: true },
         leftValue: '={{ $json.ok }}', rightValue: '',
       }],
@@ -623,19 +611,29 @@ nodes.push({
 });
 
 // ────────────────────────────────────────────────────────── 15 download
+// Posting the form returns 302 -> FileDownloader -> 302 -> an Azure blob URL
+// carrying its own SAS token. Letting n8n follow that chain lands us on the
+// zip itself, so this single node produces the binary.
 nodes.push({
   parameters: {
-    url: '={{ $json.downloadUrl }}',
+    method: 'POST',
+    url: '={{ $json.modalUrl }}',
     sendHeaders: true,
-    headerParameters: {
-      parameters: [
-        { name: 'User-Agent', value: UA },
-        { name: 'Cookie', value: '={{ $json.cookieHeader }}' },
-      ],
-    },
+    headerParameters: { parameters: [
+      { name: 'User-Agent', value: UA },
+      { name: 'Cookie', value: '={{ $json.cookieHeader }}' },
+      { name: 'Content-Type', value: 'application/x-www-form-urlencoded' },
+      { name: 'Origin', value: 'https://www.vendorpanel.com.au' },
+      { name: 'Referer', value: '={{ $json.modalUrl }}' },
+    ] },
+    sendBody: true,
+    contentType: 'raw',
+    rawContentType: 'application/x-www-form-urlencoded',
+    body: '={{ $json.rawBody }}',
     options: {
       response: { response: { responseFormat: 'file', outputPropertyName: 'data' } },
-      timeout: 180000,
+      redirect: { redirect: { followRedirects: true, maxRedirects: 10 } },
+      timeout: 300000,
     },
   },
   id: 'b-dl', name: 'Download Pack',
@@ -777,9 +775,9 @@ link('Follow Redirect 2', 'Confirm Session');
 link('Confirm Session', 'Logged In?');
 link('Logged In?', 'One Item Per Tender', 0);
 link('Logged In?', 'Slack - Login Failed', 1);
-link('One Item Per Tender', 'GET Tender Page');
-link('GET Tender Page', 'Find Pack URL');
-link('Find Pack URL', 'Pack URL Found?');
+link('One Item Per Tender', 'GET Download Modal');
+link('GET Download Modal', 'Build Postback');
+link('Build Postback', 'Pack URL Found?');
 link('Pack URL Found?', 'Download Pack', 0);
 link('Pack URL Found?', 'Slack - Manual Download Needed', 1);
 link('Download Pack', 'Name the File');
