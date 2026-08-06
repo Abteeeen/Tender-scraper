@@ -118,14 +118,31 @@ export default async function ({ page, context }) {
     { waitUntil: 'networkidle2' });
   note('tender list loaded');
 
-  // Don't use the search box — it filters on title text, not the VP reference,
-  // so searching "517599" empties the list. The page shows all open tenders at
-  // once, so scan it directly.
+  // The list is paginated (50 per page, ~8 pages). A followed tender is pinned
+  // to the top of page 1, but an unfollowed one can be on any page — and we
+  // have to follow it before the download icon becomes active. So: widen the
+  // page size, then walk the pages until the tender turns up.
+  //
+  // The search box is deliberately unused: it matches on title text, so typing
+  // a VP reference into it empties the list.
   await page.waitForNetworkIdle({ idleTime: 1500, timeout: 30000 }).catch(() => null);
 
-  // ---- locate the row, follow it, click the download icon -----------------
-  // Downloads are disabled on tenders that are not Followed, so follow first.
-  const clicked = await page.evaluate((ref, title) => {
+  // Show as many per page as the dropdown allows.
+  const grew = await page.evaluate(() => {
+    const sel = [...document.querySelectorAll('select')]
+      .find((s) => [...s.options].every((o) => /^\d+$/.test(o.value)) && s.options.length > 1);
+    if (!sel) return 0;
+    const biggest = [...sel.options].map((o) => Number(o.value)).sort((x, y) => y - x)[0];
+    sel.value = String(biggest);
+    sel.dispatchEvent(new Event('change', { bubbles: true }));
+    return biggest;
+  });
+  if (grew) {
+    await page.waitForNetworkIdle({ idleTime: 1500, timeout: 30000 }).catch(() => null);
+    note('page size set to ' + grew);
+  }
+
+  const findAndClick = (ref, title) => {
     const isIcon = (e) => {
       const s = (e.getAttribute('title') || '') + ' ' + (e.getAttribute('alt') || '') +
                 ' ' + (e.getAttribute('aria-label') || '') + ' ' + (e.className || '') +
@@ -135,60 +152,104 @@ export default async function ({ page, context }) {
     };
 
     const bodyText = document.body.innerText || '';
-    const needles = ['VP' + ref, ref, title.slice(0, 40)].filter(Boolean);
+    const needles = ['VP' + ref, title.slice(0, 40)].filter(Boolean);
     const present = needles.filter((n) => bodyText.includes(n));
 
-    // Find the deepest element that names this tender, then walk up until an
-    // ancestor also contains a download control — that ancestor is the row.
+    // deepest element naming this tender
     let anchor = null;
     const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_ELEMENT);
     while (walker.nextNode()) {
       const el = walker.currentNode;
-      if (el.children.length) continue;                 // leaf nodes only
+      if (el.children.length) continue;
       const t = (el.textContent || '').trim();
       if (!t) continue;
-      if (t.includes('VP' + ref) || t === ref || (title && t.includes(title.slice(0, 40)))) {
-        anchor = el;
-        break;
-      }
+      if (t.includes('VP' + ref) || (title && t.includes(title.slice(0, 40)))) { anchor = el; break; }
     }
+    if (!anchor) return { found: false, onThisPage: false, needlesPresent: present,
+                          listLength: bodyText.length };
 
-    if (!anchor) {
-      return { found: false, reason: 'tender not present on the list page',
-               needlesPresent: present, bodySample: bodyText.slice(0, 600),
-               listLength: bodyText.length };
-    }
-
-    let row = anchor;
-    let icon = null;
+    // walk up to the ancestor that also holds a download control
+    let row = anchor, icon = null;
     for (let up = 0; up < 12 && row; up++) {
       icon = [...row.querySelectorAll('a, img, i, span, button, input')].find(isIcon);
       if (icon) break;
       row = row.parentElement;
     }
-
     if (!icon || !row) {
-      return { found: false, reason: 'found the tender but no download control near it',
+      return { found: false, onThisPage: true, reason: 'found the tender but no download control near it',
                needlesPresent: present,
                sample: (anchor.closest('tr') || anchor.parentElement || anchor).innerHTML.slice(0, 1200) };
     }
 
-    // follow first if the row currently offers to
+    // must be Followed before the icon works
     const follow = [...row.querySelectorAll('a, span, div, label, input')]
       .find((e) => /^\s*follow\s*$/i.test((e.innerText || e.value || '').trim()));
     if (follow) follow.click();
 
-    icon.click();
-    return { found: true, followed: Boolean(follow),
+    return { found: true, onThisPage: true, followed: Boolean(follow),
              iconHtml: icon.outerHTML.slice(0, 200) };
-  }, VP_REF, TITLE);
+  };
+
+  const gotoNextPage = () => {
+    const nav = [...document.querySelectorAll('a, input, button, span')].find((e) => {
+      const s = (e.getAttribute('title') || '') + ' ' + (e.getAttribute('aria-label') || '') +
+                ' ' + (e.className || '') + ' ' + (e.id || '') + ' ' + (e.getAttribute('onclick') || '');
+      const disabled = e.disabled || /disabled/i.test(e.className || '');
+      return /next/i.test(s) && !/nextpageset|disabled/i.test(e.className || '') && !disabled;
+    });
+    if (!nav) return false;
+    nav.click();
+    return true;
+  };
+
+  let clicked = { found: false };
+  for (let pageNo = 1; pageNo <= 12; pageNo++) {
+    clicked = await page.evaluate(findAndClick, VP_REF, TITLE);
+    if (clicked.found || clicked.onThisPage) { note('found on page ' + pageNo); break; }
+
+    const moved = await page.evaluate(gotoNextPage);
+    if (!moved) { note('no further pages after ' + pageNo); break; }
+    await page.waitForNetworkIdle({ idleTime: 1500, timeout: 30000 }).catch(() => null);
+  }
+
+  // Following changes the row, so re-locate and click the icon for real.
+  if (clicked.found && clicked.followed) {
+    await new Promise((r) => setTimeout(r, 3000));
+    clicked = await page.evaluate(findAndClick, VP_REF, TITLE);
+  }
+
+  if (clicked.found) {
+    await page.evaluate((ref, title) => {
+      const isIcon = (e) => {
+        const s = (e.getAttribute('title') || '') + ' ' + (e.getAttribute('alt') || '') +
+                  ' ' + (e.getAttribute('aria-label') || '') + ' ' + (e.className || '') +
+                  ' ' + (e.getAttribute('src') || '') + ' ' + (e.getAttribute('href') || '') +
+                  ' ' + (e.getAttribute('onclick') || '');
+        return /download|package/i.test(s);
+      };
+      let anchor = null;
+      const w = document.createTreeWalker(document.body, NodeFilter.SHOW_ELEMENT);
+      while (w.nextNode()) {
+        const el = w.currentNode;
+        if (el.children.length) continue;
+        const t = (el.textContent || '').trim();
+        if (t.includes('VP' + ref) || (title && t.includes(title.slice(0, 40)))) { anchor = el; break; }
+      }
+      let row = anchor;
+      for (let up = 0; up < 12 && row; up++) {
+        const icon = [...row.querySelectorAll('a, img, i, span, button, input')].find(isIcon);
+        if (icon) { icon.click(); return true; }
+        row = row.parentElement;
+      }
+      return false;
+    }, VP_REF, TITLE);
+  }
 
   if (!clicked.found) {
-    throw new Error('Could not start the download: ' + clicked.reason +
+    throw new Error('Could not start the download: ' + (clicked.reason || 'tender not found on any page') +
       ' || needlesPresent=' + JSON.stringify(clicked.needlesPresent || []) +
       ' || listLength=' + (clicked.listLength ?? '?') +
-      (clicked.sample ? ' || ROW=' + clicked.sample : '') +
-      (clicked.bodySample ? ' || BODY=' + clicked.bodySample : ''));
+      (clicked.sample ? ' || ROW=' + clicked.sample : ''));
   }
   note('clicked the download icon ' + (clicked.iconHtml || '') +
        (clicked.followed ? ' (followed first)' : ''));
