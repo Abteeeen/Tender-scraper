@@ -271,16 +271,26 @@ export default async function ({ page, context }) {
   };
 
   let pressed = false;
-  for (let i = 0; i < 20 && !pressed; i++) {
+  for (let i = 0; i < 30 && !pressed; i++) {
     pressed = await pressDownload();
-    if (!pressed) await new Promise((r) => setTimeout(r, 1000));
+    if (!pressed) await new Promise((r) => setTimeout(r, 500));
   }
   if (!pressed) throw new Error('The download modal never showed a Download button');
   note('pressed Download — waiting for the package to build');
 
-  // VendorPanel builds the zip server-side ("Working on it.."). Give it time;
-  // Browserless returns whatever Chrome downloads during this function.
-  await new Promise((r) => setTimeout(r, 120000));
+  // VendorPanel builds the zip server-side ("Working on it..") — measured at
+  // about 21s. Wait for the actual file response rather than sleeping blindly:
+  // a fixed long sleep just burns the session and trips Browserless's timeout.
+  const gotFile = await page.waitForResponse(
+    (r) => /FileDownloader|\.zip(\?|$)|blob\.core\.windows\.net/i.test(r.url()),
+    { timeout: 150000 },
+  ).then((r) => r.url().slice(0, 120)).catch(() => null);
+
+  if (!gotFile) throw new Error('package never arrived after pressing Download');
+  note('file response seen: ' + gotFile);
+
+  // small grace period so Chrome finishes writing it to disk
+  await new Promise((r) => setTimeout(r, 8000));
   note('done: ' + log.join(' | '));
 }
 `;
@@ -327,7 +337,7 @@ nodes.push({
 nodes.push({
   parameters: {
     method: 'POST',
-    url: 'https://production-sfo.browserless.io/download',
+    url: 'https://production-sfo.browserless.io/download?timeout=180000',
     authentication: 'genericCredentialType',
     genericAuthType: 'httpCustomAuth',
     sendBody: true,
