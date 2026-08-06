@@ -301,7 +301,15 @@ const jar  = mergeCookies(prev.jar, res.headers?.['set-cookie']);
 // Signed in when we hold an identity/session cookie and are no longer being
 // shown a password box.
 const names = Object.keys(jar);
-const hasAuth = names.some(n => /idsrv|\\.AspNet|ASP\\.NET_SessionId|vp/i.test(n));
+
+// Be strict about what counts as "signed in". Antiforgery, load-balancer
+// affinity and RememberMe cookies all appear BEFORE authentication succeeds —
+// counting them was giving a false pass and sending us to the tender page
+// logged out.
+const AUTH_COOKIE = /^(idsrv|\\.AspNetCore\\.Identity\\.Application|\\.AspNetCore\\.Cookies|ASP\\.NET_SessionId|\\.ASPXAUTH|vp\\.session)/i;
+const NOT_AUTH    = /antiforgery|arraffinity|rememberme|__requestverification|consent/i;
+const authCookies = names.filter(n => AUTH_COOKIE.test(n) && !NOT_AUTH.test(n));
+const hasAuth = authCookies.length > 0;
 const stillAsking = /type="password"/i.test(html);
 const badCreds = /invalid|incorrect|not recognised|not recognized/i.test(html) && stillAsking;
 
@@ -313,6 +321,7 @@ return [{ json: {
   cookieHeader: jarToHeader(jar),
   ok,
   cookieNames: names,
+  authCookies,
   reason: ok ? '' : (badCreds ? 'credentials rejected'
         : stillAsking ? 'still on the password step (MFA, or a field the form now wants)'
         : 'no session cookie came back'),
